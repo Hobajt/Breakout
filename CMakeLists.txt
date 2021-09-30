@@ -9,7 +9,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 project(Breakout)
 
 add_executable(main 
-    "src/main.cpp")
+    "src/main.cpp" "include/breakout/log.h" "include/breakout/gl_debug.h" "src/gl_debug.cpp" "include/breakout/glm.h" "include/breakout/window.h" "src/window.cpp")
 
 target_include_directories(main PUBLIC include)
 
