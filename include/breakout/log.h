@@ -3,22 +3,27 @@
 #include <stdio.h>
 #include <exception>
 
+//TODO: properly setup these macros
+
 #define ENABLE_ASSERTS
 #define ENABLE_LOGGING
 #define GL_DEBUG
+#define DBG_ONLY(...) __VA_ARGS__
+
 
 #define BIT(n) (1<<(n))
 
-#define LOG_GL		BIT(0)
-#define LOG_ERROR	BIT(1)
-#define LOG_WARN	BIT(2)
-#define LOG_INFO	BIT(3)
-#define LOG_DEBUG	BIT(4)
-#define LOG_TRACE	BIT(5)
-#define LOG_FINE	BIT(6)
+#define LOG_GL			BIT(0)
+#define LOG_ERROR		BIT(1)
+#define LOG_WARN		BIT(2)
+#define LOG_INFO		BIT(3)
+#define LOG_DEBUG		BIT(4)
+#define LOG_TRACE		BIT(5)
+#define LOG_FINE		BIT(6)
+#define LOG_RESOURCE	BIT(7)
 
-#define LOG_CTOR	BIT(7)
-#define LOG_DTOR	BIT(8)
+#define LOG_CTOR	BIT(8)
+#define LOG_DTOR	BIT(9)
 
 #define LOG_LEVELS (unsigned int)(-1)
 
