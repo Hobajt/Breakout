@@ -130,6 +130,8 @@ public:
 	SubTextureRef operator()(int x, int y);
 	SubTextureRef operator()(int x, int y, const std::string& key);
 
+	SubTextureRef GetTexture(int x, int y);
+
 	glm::ivec2 SplitSize() const { return splitSize; }
 private:
 	void Release() noexcept;

@@ -5,8 +5,8 @@
 
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
-#include "breakout/glm.h"
 
+#include "breakout/glm.h"
 #include "breakout/log.h"
 
 class Shader;

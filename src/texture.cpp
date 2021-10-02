@@ -287,6 +287,10 @@ SubTextureRef AtlasTexture::operator()(int x, int y, const std::string& key) {
 	return textures.back();
 }
 
+SubTextureRef AtlasTexture::GetTexture(int x, int y) {
+	return operator()(x, y);
+}
+
 void AtlasTexture::Release() noexcept {
 	for (SubTextureRef& tex : textures) {
 		tex->atlas = nullptr;
