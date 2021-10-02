@@ -1,6 +1,6 @@
 #include "breakout/renderer.h"
 
-Vertex::Vertex(const glm::vec3& position_, const glm::vec4& color_, const glm::vec2& texCoords_, float textureID_) : position(position_), color(color_), texCoords(texCoords_), textureID(textureID_) {}
+Vertex::Vertex(const glm::vec3& position_, const glm::vec4& color_, const glm::vec2& texCoords_, float textureID_) : position(position_), color(color_), texCoords(texCoords_), textureID(textureID_), texTiling(glm::vec2(1.f)) {}
 
 Quad::Quad(const glm::vec3& center, const glm::vec2& hs, const glm::vec4& color, float textureID) {
 	vertices[0] = Vertex(center + glm::vec3(-hs.x, -hs.y, 0.f), color, glm::vec2(0.f, 1.f), textureID);
@@ -34,6 +34,10 @@ QuadIndices::QuadIndices(int idx) {
 
 namespace Renderer {
 
+	constexpr int maxTextures = 8;
+
+	float ResolveTextureIdx(const TextureRef& texture);
+
 	struct RendererData {
 		GLuint vao = 0;
 		GLuint vbo = 0;
@@ -47,6 +51,10 @@ namespace Renderer {
 
 		ShaderRef shader = nullptr;
 		bool inProgress = false;
+
+		TextureRef blankTexture;
+		TextureRef textures[maxTextures];
+		int texIdx = 1;
 	};
 
 	static RendererData data;
@@ -65,9 +73,11 @@ namespace Renderer {
 
 		//first call -> allocate resources
 		if (data.quadsBuffer == nullptr) {
+			//=== quad vertices & indices buffers ===
 			data.quadsBuffer = new Quad[data.batchSize];
 			data.indicesBuffer = new QuadIndices[data.batchSize];
 
+			//=== their GPU counterparts ===
 			glGenVertexArrays(1, &data.vao);
 			glGenBuffers(1, &data.vbo);
 			glGenBuffers(1, &data.ebo);
@@ -76,23 +86,44 @@ namespace Renderer {
 
 			glBindBuffer(GL_ARRAY_BUFFER, data.vbo);
 
+			//proper attributes setup
 			glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, position));
 			glEnableVertexAttribArray(0);
 			glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, color));
 			glEnableVertexAttribArray(1);
 			glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, texCoords));
 			glEnableVertexAttribArray(2);
-			glVertexAttribPointer(3, 1, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, textureID));
+			glVertexAttribPointer(3, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, texTiling));
 			glEnableVertexAttribArray(3);
+			glVertexAttribPointer(4, 1, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, textureID));
+			glEnableVertexAttribArray(4);
 
 			glBindBuffer(GL_ARRAY_BUFFER, data.vbo);
 			glBufferData(GL_ARRAY_BUFFER, sizeof(Quad) * data.batchSize, nullptr, GL_DYNAMIC_DRAW);
 
 			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, data.ebo);
 			glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(QuadIndices) * data.batchSize, nullptr, GL_DYNAMIC_DRAW);
+
+			//=== empty texture ===
+			uint8_t tmp[] = { 255,255,255,255 };
+			data.blankTexture = std::make_shared<Texture>(1, 1, GL_RGBA, GL_RGBA, GL_UNSIGNED_BYTE, &tmp, "blankTexture");
+
+
+			for (int i = 0; i < maxTextures; i++) {
+				data.textures[i] = data.blankTexture;
+			}
+
+			//=== setup texture slots in shader ===
+			data.shader->Bind();
+			char buf[256];
+			for (int i = 0; i < maxTextures; i++) {
+				snprintf(buf, sizeof(buf), "textures[%d]", i);
+				data.shader->SetInt(buf, i);
+			}
 		}
 
 		data.idx = 0;
+		data.texIdx = 1;
 	}
 
 	void End() {
@@ -117,13 +148,20 @@ namespace Renderer {
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, data.ebo);
 		glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, sizeof(QuadIndices) * data.idx, data.indicesBuffer);
 
+		for (int i = 0; i < maxTextures; i++) {
+			data.textures[i]->Bind(i);
+		}
+
 		glDrawElements(GL_TRIANGLE_STRIP, data.idx * 5, GL_UNSIGNED_INT, nullptr);
 
 		data.idx = 0;
+		data.texIdx = 1;
 	}
 
-	void RenderQuad(const glm::vec3& center, const glm::vec2& halfSize, float textureID) {
-		data.quadsBuffer[data.idx] = Quad(center, halfSize, glm::vec4(1.f), textureID);
+	void RenderQuad(const glm::vec3& center, const glm::vec2& halfSize, const TextureRef& texture) {
+		float textureIdx = ResolveTextureIdx(texture);
+
+		data.quadsBuffer[data.idx] = Quad(center, halfSize, glm::vec4(1.f), textureIdx);
 		data.indicesBuffer[data.idx] = QuadIndices(data.idx);
 		data.idx++;
 
@@ -142,8 +180,10 @@ namespace Renderer {
 		}
 	}
 
-	void RenderRotatedQuad(const glm::vec3& center, const glm::vec2& halfSize, float angle_rad, float textureID) {
-		data.quadsBuffer[data.idx] = Quad(center, halfSize, glm::vec4(1.f), textureID, angle_rad);
+	void RenderRotatedQuad(const glm::vec3& center, const glm::vec2& halfSize, float angle_rad, const TextureRef& texture) {
+		float textureIdx = ResolveTextureIdx(texture);
+
+		data.quadsBuffer[data.idx] = Quad(center, halfSize, glm::vec4(1.f), textureIdx, angle_rad);
 		data.indicesBuffer[data.idx] = QuadIndices(data.idx);
 		data.idx++;
 
@@ -160,6 +200,32 @@ namespace Renderer {
 		if (data.idx >= data.batchSize) {
 			Flush();
 		}
+	}
+
+	float ResolveTextureIdx(const TextureRef& texture) {
+		float idx = 0.f;
+
+		//search for the texture in already queued textures
+		for (int i = 0; i < maxTextures; i++) {
+			if (data.textures[i] == texture) {
+				idx = float(i);
+				break;
+			}
+		}
+
+		//not found, add texture into it's own slot
+		if (idx == 0.f) {
+			//trigger a draw call, if all the slots are already taken
+			if (data.texIdx >= maxTextures) {
+				Flush();
+			}
+
+			idx = data.texIdx;
+			data.textures[data.texIdx] = texture;
+			data.texIdx++;
+		}
+
+		return idx;
 	}
 
 }//namespace Renderer

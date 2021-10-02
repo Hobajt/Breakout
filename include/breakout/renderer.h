@@ -2,11 +2,13 @@
 
 #include "breakout/glm.h"
 #include "breakout/shader.h"
+#include "breakout/texture.h"
 
 struct Vertex {
 	glm::vec3 position;
 	glm::vec4 color;
 	glm::vec2 texCoords;
+	glm::vec2 texTiling;
 	float textureID;
 public:
 	Vertex() = default;
@@ -43,10 +45,10 @@ namespace Renderer {
 	//Triggers additional draw call.
 	void Flush();
 
-	void RenderQuad(const glm::vec3& center, const glm::vec2& halfSize, float textureID = 0.f);
+	void RenderQuad(const glm::vec3& center, const glm::vec2& halfSize, const TextureRef& texture);
 	void RenderQuad(const glm::vec3& center, const glm::vec2& halfSize, const glm::vec4& color);
 
-	void RenderRotatedQuad(const glm::vec3& center, const glm::vec2& halfSize, float angle_rad, float textureID = 0.f);
+	void RenderRotatedQuad(const glm::vec3& center, const glm::vec2& halfSize, float angle_rad, const TextureRef& texture);
 	void RenderRotatedQuad(const glm::vec3& center, const glm::vec2& halfSize, float angle_rad, const glm::vec4& color);
 
 }//namespace Renderer

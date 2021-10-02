@@ -3,6 +3,7 @@
 namespace Resources {
 
 	std::map<std::string, ShaderRef> shaders;
+	std::map<std::string, TextureRef> textures;
 
 	//==== Getters ====
 
@@ -15,6 +16,17 @@ namespace Resources {
 
 	void AddShader(const std::string& key, ShaderRef& shader) {
 		shaders[key] = shader;
+	}
+
+	TextureRef GetTexture(const std::string& key) {
+		if (textures.count(key) > 0)
+			return textures.at(key);
+		else
+			return nullptr;
+	}
+
+	void AddTexture(const std::string& key, TextureRef& texture) {
+		textures[key] = texture;
 	}
 
 }//namespace Resources
