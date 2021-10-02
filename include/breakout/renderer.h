@@ -19,8 +19,21 @@ struct Quad {
 	Vertex vertices[4];
 public:
 	Quad() = default;
-	Quad(const glm::vec3& center, const glm::vec2& halfSize, const glm::vec4& color, float textureID);
-	Quad(const glm::vec3& center, const glm::vec2& halfSize, const glm::vec4& color, float textureID, float angle_rad);
+
+	//color only quad
+	Quad(const glm::vec3& center, const glm::vec2& halfSize, const glm::vec4& color);
+	Quad(const glm::vec3& center, const glm::vec2& halfSize, const glm::vec4& color, float angle_rad);
+
+	//texture only quad
+	Quad(const glm::vec3& center, const glm::vec2& halfSize, float textureID, const ITextureRef& texture);
+	Quad(const glm::vec3& center, const glm::vec2& halfSize, float textureID, const ITextureRef& texture, float angle_rad);
+
+	//both
+	Quad(const glm::vec3& center, const glm::vec2& halfSize, const glm::vec4& colorTint, float textureID, const ITextureRef& texture);
+	Quad(const glm::vec3& center, const glm::vec2& halfSize, const glm::vec4& colorTint, float textureID, const ITextureRef& texture, float angle_rad);
+
+	//Quad(const glm::vec3& center, const glm::vec2& halfSize, float textureID);
+	//Quad(const glm::vec3& center, const glm::vec2& halfSize, float textureID, float angle_rad);
 };
 
 struct QuadIndices {
@@ -45,10 +58,10 @@ namespace Renderer {
 	//Triggers additional draw call.
 	void Flush();
 
-	void RenderQuad(const glm::vec3& center, const glm::vec2& halfSize, const TextureRef& texture);
+	void RenderQuad(const glm::vec3& center, const glm::vec2& halfSize, const ITextureRef& texture);
 	void RenderQuad(const glm::vec3& center, const glm::vec2& halfSize, const glm::vec4& color);
 
-	void RenderRotatedQuad(const glm::vec3& center, const glm::vec2& halfSize, float angle_rad, const TextureRef& texture);
+	void RenderRotatedQuad(const glm::vec3& center, const glm::vec2& halfSize, float angle_rad, const ITextureRef& texture);
 	void RenderRotatedQuad(const glm::vec3& center, const glm::vec2& halfSize, float angle_rad, const glm::vec4& color);
 
 }//namespace Renderer

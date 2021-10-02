@@ -15,8 +15,12 @@ int main(int argc, char** argv) {
 
 	ShaderRef shader = Resources::TryGetShader("test", "res/shaders/basic_quad_shader");
 
-	TextureRef texture1 = Resources::TryGetTexture("test", "res/textures/test.png");
-	TextureRef texture2 = Resources::TryGetTexture("lena", "res/textures/lena.png");
+	ITextureRef texture1 = Resources::TryGetTexture("test", "res/textures/test.png");
+	ITextureRef texture2 = Resources::TryGetTexture("lena", "res/textures/lena.png");
+
+	AtlasTexture atlas = AtlasTexture("res/textures/test_atlas.png", glm::ivec2(128, 128));
+
+	ITextureRef texture3 = atlas(2, 3);
 
 	Renderer::SetShader(shader);
 
@@ -42,6 +46,17 @@ int main(int argc, char** argv) {
 
 		Renderer::RenderQuad(glm::vec3(-0.25f, 0.25f, 0.f), glm::vec2(0.1f), texture2);
 		Renderer::RenderRotatedQuad(glm::vec3(-0.5f, 0.5f, 0.f), glm::vec2(0.1f), glm::radians(-angle), texture2);
+
+		for (int x = 0; x < 5; x++) {
+			for (int y = 0; y < 5; y++) {
+				Renderer::RenderQuad(glm::vec3(-0.25 + 0.11*x, -0.4 - 0.11*y, 0.f), glm::vec2(0.05f), atlas(7+x, 6+y));
+			}
+
+		}
+
+		//Renderer::RenderQuad(glm::vec3(-0.25, -0.75, 0.f), glm::vec2(0.05f), atlas(1, 0));
+		//Renderer::RenderQuad(glm::vec3(-0.15, -0.75, 0.f), glm::vec2(0.05f), atlas(2, 0));
+		//Renderer::RenderQuad(glm::vec3(-0.05, -0.75, 0.f), glm::vec2(0.05f), atlas(2, 0));
 
 		angle += 2.f;
 		if (angle > 360.f)

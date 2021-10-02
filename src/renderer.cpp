@@ -2,28 +2,47 @@
 
 Vertex::Vertex(const glm::vec3& position_, const glm::vec4& color_, const glm::vec2& texCoords_, float textureID_) : position(position_), color(color_), texCoords(texCoords_), textureID(textureID_), texTiling(glm::vec2(1.f)) {}
 
-Quad::Quad(const glm::vec3& center, const glm::vec2& hs, const glm::vec4& color, float textureID) {
-	vertices[0] = Vertex(center + glm::vec3(-hs.x, -hs.y, 0.f), color, glm::vec2(0.f, 1.f), textureID);
-	vertices[1] = Vertex(center + glm::vec3(-hs.x, hs.y, 0.f), color, glm::vec2(0.f, 0.f), textureID);
-	vertices[2] = Vertex(center + glm::vec3(hs.x, -hs.y, 0.f), color, glm::vec2(1.f, 1.f), textureID);
-	vertices[3] = Vertex(center + glm::vec3(hs.x, hs.y, 0.f), color, glm::vec2(1.f, 0.f), textureID);
+Quad::Quad(const glm::vec3& center, const glm::vec2& halfSize, const glm::vec4& color) : Quad(center, halfSize, color, 0.f, nullptr) {}
+Quad::Quad(const glm::vec3& center, const glm::vec2& halfSize, const glm::vec4& color, float angle_rad) : Quad(center, halfSize, color, 0.f, nullptr, angle_rad) {}
+
+Quad::Quad(const glm::vec3& center, const glm::vec2& halfSize, float textureID, const ITextureRef& texture) : Quad(center, halfSize, glm::vec4(1.f), textureID, texture) {}
+Quad::Quad(const glm::vec3& center, const glm::vec2& halfSize, float textureID, const ITextureRef& texture, float angle_rad) : Quad(center, halfSize, glm::vec4(1.f), textureID, texture, angle_rad) {}
+
+Quad::Quad(const glm::vec3& center, const glm::vec2& hs, const glm::vec4& colorTint, float textureID, const ITextureRef& texture) {
+	vertices[0] = Vertex(center + glm::vec3(-hs.x, -hs.y, 0.f), colorTint, glm::vec2(0.f, 1.f), textureID);
+	vertices[1] = Vertex(center + glm::vec3(-hs.x, hs.y, 0.f), colorTint, glm::vec2(0.f, 0.f), textureID);
+	vertices[2] = Vertex(center + glm::vec3(hs.x, -hs.y, 0.f), colorTint, glm::vec2(1.f, 1.f), textureID);
+	vertices[3] = Vertex(center + glm::vec3(hs.x, hs.y, 0.f), colorTint, glm::vec2(1.f, 0.f), textureID);
+
+	if (texture != nullptr) {
+		vertices[0].texCoords = texture->TexCoords(0);
+		vertices[1].texCoords = texture->TexCoords(1);
+		vertices[2].texCoords = texture->TexCoords(2);
+		vertices[3].texCoords = texture->TexCoords(3);
+	}
 }
 
-Quad::Quad(const glm::vec3& center, const glm::vec2& hs, const glm::vec4& color, float textureID, float angle_rad) {
+Quad::Quad(const glm::vec3& center, const glm::vec2& hs, const glm::vec4& colorTint, float textureID, const ITextureRef& texture, float angle_rad) {
 	float c = cosf(angle_rad);
 	float s = sinf(angle_rad);
 	glm::mat2 R = glm::mat2(
-		glm::vec2( c, s),
+		glm::vec2(c, s),
 		glm::vec2(-s, c)
 	);
 	glm::vec2 x = R * glm::vec2(hs.x, 0.f);
 	glm::vec2 y = R * glm::vec2(0.f, hs.y);
 
+	vertices[0] = Vertex(center + glm::vec3(-x - y, 0.f), colorTint, glm::vec2(0.f, 1.f), textureID);
+	vertices[1] = Vertex(center + glm::vec3(-x + y, 0.f), colorTint, glm::vec2(0.f, 0.f), textureID);
+	vertices[2] = Vertex(center + glm::vec3(x - y, 0.f), colorTint, glm::vec2(1.f, 1.f), textureID);
+	vertices[3] = Vertex(center + glm::vec3(x + y, 0.f), colorTint, glm::vec2(1.f, 0.f), textureID);
 
-	vertices[0] = Vertex(center + glm::vec3(-x - y, 0.f), color, glm::vec2(0.f, 1.f), textureID);
-	vertices[1] = Vertex(center + glm::vec3(-x + y, 0.f), color, glm::vec2(0.f, 0.f), textureID);
-	vertices[2] = Vertex(center + glm::vec3( x - y, 0.f), color, glm::vec2(1.f, 1.f), textureID);
-	vertices[3] = Vertex(center + glm::vec3( x + y, 0.f), color, glm::vec2(1.f, 0.f), textureID);
+	if (texture != nullptr) {
+		vertices[0].texCoords = texture->TexCoords(0);
+		vertices[1].texCoords = texture->TexCoords(1);
+		vertices[2].texCoords = texture->TexCoords(2);
+		vertices[3].texCoords = texture->TexCoords(3);
+	}
 }
 
 QuadIndices::QuadIndices(int idx) {
@@ -36,15 +55,15 @@ namespace Renderer {
 
 	constexpr int maxTextures = 8;
 
-	float ResolveTextureIdx(const TextureRef& texture);
+	float ResolveTextureIdx(const ITextureRef& texture);
 
 	struct RendererData {
 		GLuint vao = 0;
 		GLuint vbo = 0;
 		GLuint ebo = 0;
 
-		Quad* quadsBuffer;
-		QuadIndices* indicesBuffer;
+		Quad* quadsBuffer = nullptr;
+		QuadIndices* indicesBuffer = nullptr;
 
 		int batchSize = 1000;
 		int idx = 0;
@@ -52,8 +71,8 @@ namespace Renderer {
 		ShaderRef shader = nullptr;
 		bool inProgress = false;
 
-		TextureRef blankTexture;
-		TextureRef textures[maxTextures];
+		TextureRef blankTexture = nullptr;
+		ITextureRef textures[maxTextures];
 		int texIdx = 1;
 	};
 
@@ -158,10 +177,10 @@ namespace Renderer {
 		data.texIdx = 1;
 	}
 
-	void RenderQuad(const glm::vec3& center, const glm::vec2& halfSize, const TextureRef& texture) {
+	void RenderQuad(const glm::vec3& center, const glm::vec2& halfSize, const ITextureRef& texture) {
 		float textureIdx = ResolveTextureIdx(texture);
 
-		data.quadsBuffer[data.idx] = Quad(center, halfSize, glm::vec4(1.f), textureIdx);
+		data.quadsBuffer[data.idx] = Quad(center, halfSize, textureIdx, texture);
 		data.indicesBuffer[data.idx] = QuadIndices(data.idx);
 		data.idx++;
 
@@ -171,7 +190,7 @@ namespace Renderer {
 	}
 
 	void RenderQuad(const glm::vec3& center, const glm::vec2& halfSize, const glm::vec4& color) {
-		data.quadsBuffer[data.idx] = Quad(center, halfSize, color, 0.f);
+		data.quadsBuffer[data.idx] = Quad(center, halfSize, color);
 		data.indicesBuffer[data.idx] = QuadIndices(data.idx);
 		data.idx++;
 
@@ -180,10 +199,10 @@ namespace Renderer {
 		}
 	}
 
-	void RenderRotatedQuad(const glm::vec3& center, const glm::vec2& halfSize, float angle_rad, const TextureRef& texture) {
+	void RenderRotatedQuad(const glm::vec3& center, const glm::vec2& halfSize, float angle_rad, const ITextureRef& texture) {
 		float textureIdx = ResolveTextureIdx(texture);
 
-		data.quadsBuffer[data.idx] = Quad(center, halfSize, glm::vec4(1.f), textureIdx, angle_rad);
+		data.quadsBuffer[data.idx] = Quad(center, halfSize, textureIdx, texture, angle_rad);
 		data.indicesBuffer[data.idx] = QuadIndices(data.idx);
 		data.idx++;
 
@@ -193,7 +212,7 @@ namespace Renderer {
 	}
 
 	void RenderRotatedQuad(const glm::vec3& center, const glm::vec2& halfSize, float angle_rad, const glm::vec4& color) {
-		data.quadsBuffer[data.idx] = Quad(center, halfSize, color, 0.f, angle_rad);
+		data.quadsBuffer[data.idx] = Quad(center, halfSize, color, angle_rad);
 		data.indicesBuffer[data.idx] = QuadIndices(data.idx);
 		data.idx++;
 
@@ -202,7 +221,7 @@ namespace Renderer {
 		}
 	}
 
-	float ResolveTextureIdx(const TextureRef& texture) {
+	float ResolveTextureIdx(const ITextureRef& texture) {
 		float idx = 0.f;
 
 		//search for the texture in already queued textures

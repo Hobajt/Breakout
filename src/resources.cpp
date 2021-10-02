@@ -3,7 +3,7 @@
 namespace Resources {
 
 	std::map<std::string, ShaderRef> shaders;
-	std::map<std::string, TextureRef> textures;
+	std::map<std::string, ITextureRef> textures;
 
 	//==== Getters ====
 
@@ -18,14 +18,14 @@ namespace Resources {
 		shaders[key] = shader;
 	}
 
-	TextureRef GetTexture(const std::string& key) {
+	ITextureRef GetTexture(const std::string& key) {
 		if (textures.count(key) > 0)
 			return textures.at(key);
 		else
 			return nullptr;
 	}
 
-	void AddTexture(const std::string& key, TextureRef& texture) {
+	void AddTexture(const std::string& key, ITextureRef& texture) {
 		textures[key] = texture;
 	}
 

@@ -29,12 +29,12 @@ namespace Resources {
 
 	//==== Texture ====
 
-	TextureRef GetTexture(const std::string& key);
-	void AddTexture(const std::string& key, TextureRef& shader);
+	ITextureRef GetTexture(const std::string& key);
+	void AddTexture(const std::string& key, ITextureRef& shader);
 
 	template<typename... Args>
-	TextureRef TryGetTexture(const std::string& key, Args&&... args) {
-		TextureRef result = GetTexture(key);
+	ITextureRef TryGetTexture(const std::string& key, Args&&... args) {
+		ITextureRef result = GetTexture(key);
 
 		if (result == nullptr) {
 			result = std::make_shared<Texture>(std::forward<Args>(args)...);
