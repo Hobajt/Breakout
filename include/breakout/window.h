@@ -14,7 +14,7 @@ public:
 	void Close();
 	void SwapBuffers();
 
-	//GLFWwindow* Handle() { return window; }
+	GLFWwindow* Handle() { return window; }
 private:
 	Window();
 	~Window();

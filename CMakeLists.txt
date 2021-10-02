@@ -9,7 +9,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 project(Breakout)
 
 add_executable(main 
-    "src/main.cpp" "include/breakout/log.h" "include/breakout/gl_debug.h" "src/gl_debug.cpp" "include/breakout/glm.h" "include/breakout/window.h" "src/window.cpp"  "include/breakout/shader.h" "src/shader.cpp" "include/breakout/resources.h" "src/resources.cpp" "include/breakout/utils.h" "src/utils.cpp"  "include/breakout/renderer.h" "src/renderer.cpp" "include/breakout/texture.h" "src/texture.cpp" "src/stb_image.cpp" "include/breakout/game.h" "src/game.cpp" )
+    "src/main.cpp" "include/breakout/log.h" "include/breakout/gl_debug.h" "src/gl_debug.cpp" "include/breakout/glm.h" "include/breakout/window.h" "src/window.cpp"  "include/breakout/shader.h" "src/shader.cpp" "include/breakout/resources.h" "src/resources.cpp" "include/breakout/utils.h" "src/utils.cpp"  "include/breakout/renderer.h" "src/renderer.cpp" "include/breakout/texture.h" "src/texture.cpp" "src/stb_image.cpp" "include/breakout/game.h" "src/game.cpp"   )
 
 target_include_directories(main PUBLIC include)
 
