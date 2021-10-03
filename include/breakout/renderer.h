@@ -3,6 +3,7 @@
 #include "breakout/glm.h"
 #include "breakout/shader.h"
 #include "breakout/texture.h"
+#include "breakout/text.h"
 
 struct Vertex {
 	glm::vec3 position;
@@ -10,6 +11,7 @@ struct Vertex {
 	glm::vec2 texCoords;
 	glm::vec2 texTiling;
 	float textureID;
+	float alphaTexture;
 public:
 	Vertex() = default;
 	Vertex(const glm::vec3& position, const glm::vec4& color, const glm::vec2& texCoords, float textureID);
@@ -32,8 +34,7 @@ public:
 	Quad(const glm::vec3& center, const glm::vec2& halfSize, const glm::vec4& colorTint, float textureID, const ITextureRef& texture);
 	Quad(const glm::vec3& center, const glm::vec2& halfSize, const glm::vec4& colorTint, float textureID, const ITextureRef& texture, float angle_rad);
 
-	//Quad(const glm::vec3& center, const glm::vec2& halfSize, float textureID);
-	//Quad(const glm::vec3& center, const glm::vec2& halfSize, float textureID, float angle_rad);
+	Quad(const CharInfo& charInfo, const glm::vec2& topLeft, float scale, const glm::vec4& color, float textureID, const glm::vec2& _1_atlSize, const glm::vec2& _1_winSize);
 };
 
 struct QuadIndices {
@@ -63,5 +64,8 @@ namespace Renderer {
 
 	void RenderRotatedQuad(const glm::vec3& center, const glm::vec2& halfSize, float angle_rad, const ITextureRef& texture);
 	void RenderRotatedQuad(const glm::vec3& center, const glm::vec2& halfSize, float angle_rad, const glm::vec4& color);
+
+	void RenderText(const FontRef& font, const char* text, const glm::vec2& topLeft, float scale, const glm::vec4& color);
+	void RenderText_Centered(const FontRef& font, const char* text, const glm::vec2& center, float scale, const glm::vec4& color);
 
 }//namespace Renderer

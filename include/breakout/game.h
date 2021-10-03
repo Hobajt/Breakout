@@ -19,6 +19,8 @@ namespace Game {
 		Playing,
 		Paused,
 		IngameMenu,
+		LostBall,
+		EndScreen
 	};
 
 	struct Platform {

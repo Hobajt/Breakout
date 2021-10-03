@@ -42,10 +42,10 @@ SubTexture::SubTexture(AtlasTexture* atlas_, const glm::ivec2& coords_, const st
 	offset = size * coords;
 	glm::vec2 of = glm::vec2(offset);
 
-	texCoords[0] = (of + glm::vec2(0.f, size.y))		/ atlasSize;
-	texCoords[1] = (of + glm::vec2(0.f, 0.f))			/ atlasSize;
-	texCoords[2] = (of + glm::vec2(size.x, size.y))		/ atlasSize;
-	texCoords[3] = (of + glm::vec2(size.x, 0.f))		/ atlasSize;
+	texCoords[0] = (of + glm::vec2(0.f, size.y)) / atlasSize;
+	texCoords[1] = (of + glm::vec2(0.f, 0.f)) / atlasSize;
+	texCoords[2] = (of + glm::vec2(size.x, size.y)) / atlasSize;
+	texCoords[3] = (of + glm::vec2(size.x, 0.f)) / atlasSize;
 }
 
 SubTexture::SubTexture(SubTexture&& st) noexcept : ITexture(std::move(st)) {
@@ -164,6 +164,14 @@ Texture::Texture(int width_, int height_, GLenum internalFormat_, GLenum format,
 	glBindTexture(GL_TEXTURE_2D, handle);
 
 	glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, width, height, 0, format, dtype, data);
+	if (params.filtering != GL_NONE) {
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, params.filtering);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, params.filtering);
+	}
+	if (params.wrapping != GL_NONE) {
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, params.wrapping);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, params.wrapping);
+	}
 
 	glBindTexture(GL_TEXTURE_2D, 0);
 
@@ -223,6 +231,10 @@ void Texture::Move(Texture&& t) noexcept {
 }
 
 //===== AtlasTexture =====
+
+AtlasTexture::AtlasTexture(int width_, int height_, GLenum internalFormat_, const std::string& name_) : Texture(width_, height_, internalFormat_, name_), splitSize(glm::ivec2(0)) {}
+
+AtlasTexture::AtlasTexture(int width_, int height_, GLenum internalFormat_, GLenum format_, GLenum dtype_, const std::string& name_) : Texture(width_, height_, internalFormat_, format_, dtype_, nullptr, name_), splitSize(glm::ivec2(0)) {}
 
 AtlasTexture::AtlasTexture(const std::string& filepath, const std::string& configFilepath, const TextureParams& params) : AtlasTexture(filepath, glm::ivec2(0), params) {
 	//TODO: load subtextures from config file

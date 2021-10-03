@@ -1,6 +1,7 @@
 #include "breakout/renderer.h"
+#include "breakout/window.h"
 
-Vertex::Vertex(const glm::vec3& position_, const glm::vec4& color_, const glm::vec2& texCoords_, float textureID_) : position(position_), color(color_), texCoords(texCoords_), textureID(textureID_), texTiling(glm::vec2(1.f)) {}
+Vertex::Vertex(const glm::vec3& position_, const glm::vec4& color_, const glm::vec2& texCoords_, float textureID_) : position(position_), color(color_), texCoords(texCoords_), textureID(textureID_), texTiling(glm::vec2(1.f)), alphaTexture(0.f) {}
 
 Quad::Quad(const glm::vec3& center, const glm::vec2& halfSize, const glm::vec4& color) : Quad(center, halfSize, color, 0.f, nullptr) {}
 Quad::Quad(const glm::vec3& center, const glm::vec2& halfSize, const glm::vec4& color, float angle_rad) : Quad(center, halfSize, color, 0.f, nullptr, angle_rad) {}
@@ -45,6 +46,26 @@ Quad::Quad(const glm::vec3& center, const glm::vec2& hs, const glm::vec4& colorT
 	}
 }
 
+Quad::Quad(const CharInfo& ch, const glm::vec2& pos, float scale, const glm::vec4& color, float textureID, const glm::vec2& _1_atlSize, const glm::vec2& _1_winSize) {
+	float x = pos.x + (ch.bearing.x * scale) * _1_winSize.x;
+	float y = pos.y - ((ch.size.y - ch.bearing.y) * scale) * _1_winSize.y;
+
+	float w = (ch.size.x * scale) * _1_winSize.x;
+	float h = (ch.size.y * scale) * _1_winSize.y;
+
+	float tx = ch.textureOffset;
+	float ow = ch.size.x;
+	float oh = ch.size.y;
+
+	vertices[0] = Vertex(glm::vec3(x  , y  , 0.f), color, glm::vec2(tx   , oh ) * _1_atlSize, textureID);
+	vertices[1] = Vertex(glm::vec3(x  , y+h, 0.f), color, glm::vec2(tx   , 0.f) * _1_atlSize, textureID);
+	vertices[2] = Vertex(glm::vec3(x+w, y  , 0.f), color, glm::vec2(tx+ow, oh ) * _1_atlSize, textureID);
+	vertices[3] = Vertex(glm::vec3(x+w, y+h, 0.f), color, glm::vec2(tx+ow, 0.f) * _1_atlSize, textureID);
+
+	vertices[0].alphaTexture = vertices[1].alphaTexture = 1.f;
+	vertices[2].alphaTexture = vertices[3].alphaTexture = 1.f;
+}
+
 QuadIndices::QuadIndices(int idx) {
 	for(int i = 0; i < 4; i++)
 		indices[i] = (idx * 4) + i;
@@ -56,6 +77,10 @@ namespace Renderer {
 	constexpr int maxTextures = 8;
 
 	float ResolveTextureIdx(const ITextureRef& texture);
+
+	struct RendererStats {
+		int drawCalls = 0;
+	};
 
 	struct RendererData {
 		GLuint vao = 0;
@@ -72,8 +97,10 @@ namespace Renderer {
 		bool inProgress = false;
 
 		TextureRef blankTexture = nullptr;
-		ITextureRef textures[maxTextures];
+		ITexture* textures[maxTextures];
 		int texIdx = 1;
+
+		RendererStats stats;
 	};
 
 	static RendererData data;
@@ -89,6 +116,7 @@ namespace Renderer {
 			LOG(LOG_WARN, "Renderer - Multiple Begin() calls without calling End().\n");
 		}
 		data.inProgress = true;
+		data.stats.drawCalls = 0;
 
 		//first call -> allocate resources
 		if (data.quadsBuffer == nullptr) {
@@ -116,6 +144,8 @@ namespace Renderer {
 			glEnableVertexAttribArray(3);
 			glVertexAttribPointer(4, 1, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, textureID));
 			glEnableVertexAttribArray(4);
+			glVertexAttribPointer(5, 1, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, alphaTexture));
+			glEnableVertexAttribArray(5);
 
 			glBindBuffer(GL_ARRAY_BUFFER, data.vbo);
 			glBufferData(GL_ARRAY_BUFFER, sizeof(Quad) * data.batchSize, nullptr, GL_DYNAMIC_DRAW);
@@ -129,7 +159,7 @@ namespace Renderer {
 
 
 			for (int i = 0; i < maxTextures; i++) {
-				data.textures[i] = data.blankTexture;
+				data.textures[i] = data.blankTexture.get();
 			}
 
 			//=== setup texture slots in shader ===
@@ -152,6 +182,7 @@ namespace Renderer {
 		data.inProgress = false;
 
 		Flush();
+		//LOG(LOG_INFO, "Draw calls: %d\n", data.stats.drawCalls);
 	}
 
 	void Flush() {
@@ -175,6 +206,7 @@ namespace Renderer {
 
 		data.idx = 0;
 		data.texIdx = 1;
+		data.stats.drawCalls++;
 	}
 
 	void RenderQuad(const glm::vec3& center, const glm::vec2& halfSize, const ITextureRef& texture) {
@@ -221,12 +253,77 @@ namespace Renderer {
 		}
 	}
 
+	void RenderText(const FontRef& font, const char* text, const glm::vec2& topLeft, float scale, const glm::vec4& color) {
+
+		glm::vec2 pos = topLeft;
+		float textureID = ResolveTextureIdx(font->GetAtlasTexture());
+
+		glm::vec2 _1_winSize = 1.f / glm::vec2(Window::Get().Width(), Window::Get().Height());
+
+		// iterate through all characters
+		std::string::const_iterator c;
+		for (const char* c = text; *c; c++) {
+			const CharInfo& ch = font->GetChar(*c);
+			data.quadsBuffer[data.idx] = Quad(ch, pos, scale, color, textureID, font->AtlasSizeDenom(), _1_winSize);
+			data.indicesBuffer[data.idx] = QuadIndices(data.idx);
+			data.idx++;
+
+			pos.x += (ch.advance.x * scale) * _1_winSize.x;
+			pos.y += (ch.advance.y * scale) * _1_winSize.y;
+
+			if (data.idx >= data.batchSize) {
+				Flush();
+			}
+		}
+
+	}
+
+	void RenderText_Centered(const FontRef& font, const char* text, const glm::vec2& center, float scale, const glm::vec4& color) {
+		glm::vec2 _1_winSize = 1.f / glm::vec2(Window::Get().Width(), Window::Get().Height());
+		float textureID = ResolveTextureIdx(font->GetAtlasTexture());
+
+		int width = 0;
+		int height = 0;
+		for (const char* c = text; *c; c++) {
+			const CharInfo& ch = font->GetChar(*c);
+			
+			int charHeight = ch.advance.x * scale;
+			height = std::max(charHeight, height);
+			width += ch.advance.x * scale;
+		}
+
+		glm::vec2 off = glm::vec2(width / 2, height / 2) * _1_winSize;
+		glm::vec2 pos = center - off;
+
+		// iterate through all characters
+		for (const char* c = text; *c; c++) {
+			const CharInfo& ch = font->GetChar(*c);
+			data.quadsBuffer[data.idx] = Quad(ch, pos, scale, color, textureID, font->AtlasSizeDenom(), _1_winSize);
+			data.indicesBuffer[data.idx] = QuadIndices(data.idx);
+			data.idx++;
+
+			pos.x += (ch.advance.x * scale) * _1_winSize.x;
+			pos.y += (ch.advance.y * scale) * _1_winSize.y;
+
+			if (data.idx >= data.batchSize) {
+				Flush();
+			}
+		}
+
+	}
+
 	float ResolveTextureIdx(const ITextureRef& texture) {
 		float idx = 0.f;
 
+		SubTexture* st = dynamic_cast<SubTexture*>(texture.get());
+		ITexture* tex = texture.get();
+		if (st != nullptr) {
+			tex = st->GetAtlas();
+		}
+
 		//search for the texture in already queued textures
 		for (int i = 0; i < maxTextures; i++) {
-			if (data.textures[i] == texture) {
+			if (data.textures[i] == tex) {
 				idx = float(i);
 				break;
 			}
@@ -240,7 +337,7 @@ namespace Renderer {
 			}
 
 			idx = data.texIdx;
-			data.textures[data.texIdx] = texture;
+			data.textures[data.texIdx] = tex;
 			data.texIdx++;
 		}
 

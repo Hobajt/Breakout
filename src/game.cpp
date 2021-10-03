@@ -5,6 +5,7 @@
 #include "breakout/renderer.h"
 #include "breakout/resources.h"
 #include "breakout/texture.h"
+#include "breakout/text.h"
 #include "breakout/utils.h"
 
 #include <glad/glad.h>
@@ -18,7 +19,9 @@ namespace Game {
 #define PLATFORM_HEIGHT 0.03f
 #define PLATFORM_BOUNCE_STEEPNESS 1.5f
 
-#define DEFAULT_BALL_SPEED 0.5f
+#define RESET_DELAY_SEC 0.75f
+
+#define DEFAULT_BALL_SPEED 1.0f
 #define DEFAULT_PLATFORM_SPEED 0.5f
 #define DEFAULT_PLATFORM_SCALE 0.2f
 
@@ -42,21 +45,27 @@ namespace Game {
 		glm::ivec2 fieldSize;
 		glm::vec2 brickSize;
 		float fieldOffsetY = 0.2f;
+
+		float lostBallTime = 0.f;
 	};
 
 	struct GameResources {
 		ShaderRef quadShader;
 		AtlasTextureRef atlas;
 		TextureRef background;
+		FontRef font;
 	};
 
 	static GameResources res;
 	static InGameState state;
 
+	static char textbuf[256];
+
 	void DeltaTimeUpdate();
 	void RenderScene();
 	void GameUpdate();
 	void CollisionResolution();
+	void MidGame_Reset();
 	void GameStateReset();
 
 	void Ingame_KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods);
@@ -82,6 +91,7 @@ namespace Game {
 		res.quadShader = Resources::TryGetShader("quads", "res/shaders/basic_quad_shader");
 		res.atlas = std::make_shared<AtlasTexture>("res/textures/atlas01.png", glm::ivec2(128, 128));
 		res.background = std::make_shared<Texture>("res/textures/background_ingame.png");
+		res.font = std::make_shared<Font>("res/fonts/PermanentMarker-Regular.ttf");
 	}
 
 	void Run() {
@@ -182,11 +192,22 @@ namespace Game {
 				case GameState::Paused:
 					RenderScene();
 					Renderer::RenderQuad(glm::vec3(0.f), glm::vec2(1.f), glm::vec4(glm::vec3(0.0f), 0.5f));
+					Renderer::RenderText_Centered(res.font, "Game Paused", glm::vec2(0.f), 2.f, glm::vec4(1.f));
 					break;
 				case GameState::IngameMenu:
 					RenderScene();
 					Renderer::RenderQuad(glm::vec3(0.f), glm::vec2(1.f), glm::vec4(glm::vec3(0.0f), 0.5f));
 					//TODO: render menu stuff
+					break;
+				case GameState::LostBall:
+					RenderScene();
+					//continue moving the ball
+					state.b.pos += state.b.dir * state.b.speed * state.deltaTime;
+
+					if (state.lostBallTime + RESET_DELAY_SEC < glfwGetTime()) {
+						state.state = GameState::Playing;
+						MidGame_Reset();
+					}
 					break;
 			}
 
@@ -195,20 +216,24 @@ namespace Game {
 		}
 	}
 
-	void GameStateReset() {
+	void MidGame_Reset() {
 		state.p.pos = 0.f;
 		state.b.pos = glm::vec2(state.p.pos, PLATFORM_Y_POS + PLATFORM_HEIGHT + state.b.radius);
 		state.b.dir = glm::vec2(0.0f, 1.f);
 		state.b.onPlatform = true;
+	}
 
+	void GameStateReset() {
 		state.b.speed = DEFAULT_BALL_SPEED;
 		state.p.speed = DEFAULT_PLATFORM_SPEED;
 		state.p.scale = DEFAULT_PLATFORM_SCALE;
+
+		MidGame_Reset();
 	}
 
 	void RenderScene() {
 		//background texture
-		Renderer::RenderQuad(glm::vec3(0.f, 0.f, 1.f), glm::vec2(1.f), res.background);
+		//Renderer::RenderQuad(glm::vec3(0.f, 0.f, 1.f), glm::vec2(1.f), res.background);
 
 		//platform
 		Renderer::RenderQuad(glm::vec3(state.p.pos, PLATFORM_Y_POS, 0.f), glm::vec2(state.p.scale, PLATFORM_HEIGHT), glm::vec4(glm::vec3(0.3f), 1.f));
@@ -216,12 +241,22 @@ namespace Game {
 
 		//bricks
 		for (Brick& b : state.bricks) {
-			Renderer::RenderQuad(glm::vec3(b.pos, 0.f), glm::vec2(state.brickSize), glm::vec4(1.f, 0.f, 0.f, 1.f));
+			/*Renderer::RenderQuad(glm::vec3(b.pos, 0.f), glm::vec2(state.brickSize), glm::vec4(1.f, 0.f, 0.f, 1.f));*/
+			Renderer::RenderQuad(glm::vec3(b.pos, 0.f), glm::vec2(state.brickSize), res.atlas->GetTexture(1,0));
 		}
 
 		//ball
 		glm::vec2 ballSize = glm::vec2(state.b.radius / Window::Get().AspectRatio(), state.b.radius);
 		Renderer::RenderQuad(glm::vec3(state.b.pos, 0.f), ballSize, res.atlas->GetTexture(0, 0));
+
+		//texts
+		snprintf(textbuf, sizeof(textbuf), "Lives: %d", state.lives);
+		Renderer::RenderText(res.font, textbuf, glm::vec2(-0.95f, 0.9f), 1.f, glm::vec4(1.f));
+
+		snprintf(textbuf, sizeof(textbuf), "Level: %d", state.level + 1);
+		Renderer::RenderText(res.font, textbuf, glm::vec2(-0.95f, 0.8f), 1.f, glm::vec4(1.f));
+
+		//Renderer::RenderQuad(glm::vec3(0.f, 0.f, 1.f), glm::vec2(1.f), res.font->GetAtlasTexture());
 	}
 
 	void GameUpdate() {
@@ -292,7 +327,15 @@ namespace Game {
 
 		//collisions with walls (left/top/right -> bounce, bottom -> lose)
 		if (WallsCollision()) {
-			printf("Ball lost.\n");
+			if ((--state.lives) <= 0) {
+				state.state = GameState::EndScreen;
+				LOG(LOG_INFO, "Ball lost. Game over.\n");
+			}
+			else {
+				state.lostBallTime = glfwGetTime();
+				state.state = GameState::LostBall;
+				LOG(LOG_INFO, "Ball lost. Remaining lives: %d\n", state.lives);
+			}
 		}
 	}
 

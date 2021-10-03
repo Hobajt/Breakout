@@ -63,6 +63,8 @@ public:
 	virtual glm::vec2 TexCoords(int i) const override;
 
 	bool MatchingCoords(int x, int y) const;
+
+	Texture* GetAtlas() { return atlas; }
 private:
 	void Move(SubTexture&&) noexcept;
 private:
@@ -117,6 +119,9 @@ protected:
 
 class AtlasTexture : public Texture {
 public:
+	AtlasTexture(int width, int height, GLenum internalFormat, const std::string& name);
+	AtlasTexture(int width, int height, GLenum internalFormat, GLenum format, GLenum dtype, const std::string& name);
+
 	AtlasTexture(const std::string& filepath, const std::string& configFilepath, const TextureParams& params = {});
 	AtlasTexture(const std::string& filepath, const glm::ivec2& splitSize, const TextureParams& params = {});
 
