@@ -2,6 +2,8 @@
 
 struct GLFWwindow;
 
+typedef void (*ResizeCallbackType)(int width, int height);
+
 //Manages window properties & operations. Singleton pattern.
 class Window {
 public:
@@ -15,6 +17,12 @@ public:
 	void SwapBuffers();
 
 	GLFWwindow* Handle() { return window; }
+
+	void Resize(int width, int height);
+
+	int Width() const { return width; }
+	int Height() const { return height; }
+	float AspectRatio() const { return float(width) / float(height); }
 private:
 	Window();
 	~Window();
@@ -31,4 +39,5 @@ private:
 	int height = 480;
 
 	GLFWwindow* window = nullptr;
+	ResizeCallbackType ResizeCallback = nullptr;
 };

@@ -10,6 +10,8 @@ bool Initialize(GLFWwindow*& window, int width, int height, const char* windowNa
 
 //===== Window =====
 
+void onResizeCallback(GLFWwindow* window, int width, int height);
+
 #define WINDOW_VALIDITY_CHECK() ASSERT_MSG(window != nullptr, "\tAttempting to use uninitialized window.\n")
 
 Window& Window::Get() {
@@ -23,6 +25,9 @@ void Window::Init(int width_, int height_, const char* windowName) {
 	if (!Initialize(window, width, height, windowName)) {
 		throw std::exception();
 	}
+
+	glfwSetWindowUserPointer(window, this);
+	glfwSetFramebufferSizeCallback(window, onResizeCallback);
 }
 
 bool Window::ShouldClose() const {
@@ -105,5 +110,21 @@ bool Initialize(GLFWwindow*& window, int width, int height, const char* windowNa
 
 	return true;
 }
+
+void onResizeCallback(GLFWwindow* window, int width, int height) {
+	Window& w = *static_cast<Window*>(glfwGetWindowUserPointer(window));
+	w.Resize(width, height);
+}
+
+void Window::Resize(int newWidth, int newHeight) {
+	width = newWidth;
+	height = newHeight;
+
+	glViewport(0, 0, width, height);
+	if (ResizeCallback) {
+		ResizeCallback(width, height);
+	}
+}
+
 
 #undef WINDOW_VALIDITY_CHECK
