@@ -14,6 +14,14 @@
 
 namespace Game {
 
+#define PLATFORM_Y_POS -0.96f
+#define PLATFORM_HEIGHT 0.03f
+#define PLATFORM_BOUNCE_STEEPNESS 1.5f
+
+#define DEFAULT_BALL_SPEED 0.5f
+#define DEFAULT_PLATFORM_SPEED 0.5f
+#define DEFAULT_PLATFORM_SCALE 0.2f
+
 	struct InputState {
 		bool left = false;
 		bool right = false;
@@ -47,9 +55,23 @@ namespace Game {
 
 	void DeltaTimeUpdate();
 	void RenderScene();
-	void ProcessInput();
+	void GameUpdate();
+	void CollisionResolution();
+	void GameStateReset();
 
 	void Ingame_KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods);
+
+	//===== Collision handling =====
+
+	//Collision detection between two AABBs.
+	bool AABB_AABBCollision(const glm::vec2& aPos, const glm::vec2& aSize, const glm::vec2& bPos, const glm::vec2& bSize);
+	//Ball-wall collision detection & resolution.
+	//Returns true if ball touched the bottom wall -> player loses life.
+	bool WallsCollision();
+	bool Ball_PlatformCollision(glm::vec2& out_posFix, glm::vec2& out_newDir);
+	bool Ball_BrickCollision(const Brick& brick, glm::vec2& out_posFix, glm::vec2& out_newDir);
+
+	//===== Game =====
 
 	void Init() {
 		Window& window = Window::Get();
@@ -138,7 +160,9 @@ namespace Game {
 		state.state = GameState::Playing;
 		DeltaTimeUpdate();
 
-		LoadLevel("res/levels/level00.txt");
+		LoadLevel("res/levels/level01.txt");
+
+		GameStateReset();
 
 		glEnable(GL_BLEND);
 		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -152,7 +176,7 @@ namespace Game {
 			
 			switch (state.state) {
 				case GameState::Playing:
-					ProcessInput();
+					GameUpdate();
 					RenderScene();
 					break;
 				case GameState::Paused:
@@ -171,13 +195,24 @@ namespace Game {
 		}
 	}
 
+	void GameStateReset() {
+		state.p.pos = 0.f;
+		state.b.pos = glm::vec2(state.p.pos, PLATFORM_Y_POS + PLATFORM_HEIGHT + state.b.radius);
+		state.b.dir = glm::vec2(0.0f, 1.f);
+		state.b.onPlatform = true;
+
+		state.b.speed = DEFAULT_BALL_SPEED;
+		state.p.speed = DEFAULT_PLATFORM_SPEED;
+		state.p.scale = DEFAULT_PLATFORM_SCALE;
+	}
+
 	void RenderScene() {
 		//background texture
 		Renderer::RenderQuad(glm::vec3(0.f, 0.f, 1.f), glm::vec2(1.f), res.background);
 
 		//platform
-		Renderer::RenderQuad(glm::vec3(state.p.pos, -0.96f, 0.f), glm::vec2(state.p.scale, 0.03f), glm::vec4(glm::vec3(0.3f), 1.f));
-		Renderer::RenderQuad(glm::vec3(state.p.pos, -0.96f, 0.f), glm::vec2(state.p.scale, 0.03f) - 0.01f, glm::vec4(glm::vec3(0.7f), 1.f));
+		Renderer::RenderQuad(glm::vec3(state.p.pos, PLATFORM_Y_POS, 0.f), glm::vec2(state.p.scale, PLATFORM_HEIGHT), glm::vec4(glm::vec3(0.3f), 1.f));
+		Renderer::RenderQuad(glm::vec3(state.p.pos, PLATFORM_Y_POS, 0.f), glm::vec2(state.p.scale, PLATFORM_HEIGHT) - 0.01f, glm::vec4(glm::vec3(0.7f), 1.f));
 
 		//bricks
 		for (Brick& b : state.bricks) {
@@ -189,7 +224,10 @@ namespace Game {
 		Renderer::RenderQuad(glm::vec3(state.b.pos, 0.f), ballSize, res.atlas->GetTexture(0, 0));
 	}
 
-	void ProcessInput() {
+	void GameUpdate() {
+		float prevPos = state.p.pos;
+
+		//input processing - platform movement
 		if (state.state == GameState::Playing && (state.inputs.left || state.inputs.right)) {
 			float move = (float(state.inputs.right) - float(state.inputs.left)) * state.p.speed;
 			state.p.pos += move * state.deltaTime;
@@ -199,6 +237,62 @@ namespace Game {
 				state.p.pos = -0.98f + state.p.scale;
 			if (state.p.pos > 0.98f - state.p.scale)
 				state.p.pos = 0.98f - state.p.scale;
+		}
+		
+		//ball update
+		if (state.b.onPlatform) {
+			//stick to the platform
+			float ballXOffset = state.b.pos.x - prevPos;
+			state.b.pos = glm::vec2(state.p.pos + ballXOffset, PLATFORM_Y_POS + PLATFORM_HEIGHT + state.b.radius);
+		}
+		else {
+			//ball movement
+			state.b.pos += state.b.dir * state.b.speed * state.deltaTime;
+
+			//collision detection & resolution
+			CollisionResolution();
+		}
+	}
+
+	void CollisionResolution() {
+		glm::vec2 ballSize = glm::vec2(state.b.radius);
+		std::vector<int> bricksDeleteIdx;
+		glm::vec2 posFix, newDir;
+
+		//collisions with bricks
+		for(int i = 0; i < int(state.bricks.size()); i++) {
+#if 0
+			if(AABB_AABBCollision(state.b.pos, ballSize, state.bricks[i].pos, state.brickSize)) {
+				bricksDeleteIdx.push_back(i);
+				break;
+			}
+#else
+			if (Ball_BrickCollision(state.bricks[i], posFix, newDir)) {
+				bricksDeleteIdx.push_back(i);
+
+				//fix ball's position and change direction (bounce)
+				state.b.pos += posFix;
+				state.b.dir = newDir;
+				break;
+			}
+#endif
+		}
+
+		//delete marked bricks
+		for (auto it = bricksDeleteIdx.rbegin(); it != bricksDeleteIdx.rend(); ++it) {
+			state.bricks.erase(state.bricks.begin() + *it);
+		}
+
+		//collision with platform
+		if (Ball_PlatformCollision(posFix, newDir)) {
+			state.b.pos += posFix;
+			state.b.dir = newDir;
+			//state.b.onPlatform = true;
+		}
+
+		//collisions with walls (left/top/right -> bounce, bottom -> lose)
+		if (WallsCollision()) {
+			printf("Ball lost.\n");
 		}
 	}
 
@@ -229,7 +323,116 @@ namespace Game {
 			case GLFW_KEY_ESCAPE:	//ingame menu
 
 				break;
+			case GLFW_KEY_SPACE:	//fire the ball
+				if (action == GLFW_PRESS && state.b.onPlatform) {
+					state.b.onPlatform = false;
+				}
+				break;
 		}
+	}
+
+	//===== Collision handling =====
+
+	//Collision detection between two AABBs.
+	bool AABB_AABBCollision(const glm::vec2& aPos, const glm::vec2& aSize, const glm::vec2& bPos, const glm::vec2& bSize) {
+		glm::vec2 aMin = aPos - aSize;
+		glm::vec2 aMax = aPos + aSize;
+		glm::vec2 bMin = bPos - bSize;
+		glm::vec2 bMax = bPos + bSize;
+
+		bool xCheck = (aMin.x < bMax.x) && (aMax.x > bMin.x);
+		bool yCheck = (aMin.y < bMax.y) && (aMax.y > bMin.y);
+
+		return (xCheck && yCheck);
+	}
+
+	//Ball-wall collision detection & resolution.
+	//Returns true if ball touched the bottom wall -> player loses life.
+	bool WallsCollision() {
+		glm::vec2 bMin = state.b.pos - state.b.radius;
+		glm::vec2 bMax = state.b.pos + state.b.radius;
+
+		if (bMin.x <= -1.f || bMax.x >= 1.f) {
+			state.b.dir.x = -state.b.dir.x;
+		}
+		else if (bMax.y >= 1.f) {
+			state.b.dir.y = -state.b.dir.y;
+		}
+		else if (bMin.y <= -1.f) {
+			return true;
+		}
+
+		return false;
+	}
+
+	bool Ball_PlatformCollision(glm::vec2& out_posFix, glm::vec2& out_newDir) {
+		glm::vec2 pMin = glm::vec2(state.p.pos - state.p.scale, PLATFORM_Y_POS - PLATFORM_HEIGHT);
+		glm::vec2 pMax = glm::vec2(state.p.pos + state.p.scale, PLATFORM_Y_POS + PLATFORM_HEIGHT);
+
+		glm::vec2 P = glm::clamp(state.b.pos, pMin, pMax);
+		float dist = glm::distance(P, state.b.pos);
+		if (dist < state.b.radius) {
+			//compute position fix vector
+			glm::vec2 a = (P - state.b.pos);
+			glm::vec2 b = a * (state.b.radius / dist);
+			out_posFix = a - b;
+
+			////new direction -> based on distance from platform's center
+			//out_newDir = state.b.dir;
+			//if (P.x == pMin.x || P.x == pMax.x) {
+			//	//collision with left/right side of brick
+			//	out_newDir.x = -out_newDir.x;
+			//}
+			//else {
+			//	//collision with top/bottom side of brick
+			//	out_newDir.y = -out_newDir.y;
+			//}
+			////float f = 0.5f + (fabsf(P.x - state.p.pos) / state.p.scale);
+			////out_newDir.x *= f;
+			////out_newDir = glm::normalize(out_newDir);
+
+			float f = ((P.x - state.p.pos) / state.p.scale) * PLATFORM_BOUNCE_STEEPNESS;
+			out_newDir = glm::normalize(glm::vec2(f, 1.f));
+
+			printf("%.2f\n", f);
+
+			return true;
+		}
+
+		return false;
+	}
+
+	bool Ball_BrickCollision(const Brick& brick, glm::vec2& out_posFix, glm::vec2& out_newDir) {
+		glm::vec2 brickMin = brick.pos - state.brickSize;
+		glm::vec2 brickMax = brick.pos + state.brickSize;
+
+		glm::vec2 P = glm::clamp(state.b.pos, brickMin, brickMax);
+
+		float dist = glm::distance(P, state.b.pos);
+		if (dist < state.b.radius) {
+			//compute position fix vector
+			glm::vec2 a = (P - state.b.pos);
+			glm::vec2 b = a * (state.b.radius / dist);
+			out_posFix = a - b;
+
+			//glm::vec2 N = ...;
+			//out_newDir = glm::normalize(state.b.dir - 2.f * glm::dot(state.b.dir, N) * N);
+
+			//compute bounce direction
+			out_newDir = state.b.dir;
+			if (P.x == brickMin.x || P.x == brickMax.x) {
+				//collision with left/right side of brick
+				out_newDir.x = -out_newDir.x;
+			}
+			else {
+				//collision with top/bottom side of brick
+				out_newDir.y = -out_newDir.y;
+			}
+
+			return true;
+		}
+		else
+			return false;
 	}
 
 }//namespace Game

@@ -23,15 +23,17 @@ namespace Game {
 
 	struct Platform {
 		float pos = 0.f;
-		float scale = 0.2f;
-		float speed = 0.5f;
+		float scale;
+		float speed;
 	};
 
 	struct Ball {
 		glm::vec2 pos = glm::vec2(0.f);
-		glm::vec2 dir;
+		glm::vec2 dir = glm::vec2(0.f, 1.f);
 		float speed;
-		float radius = 0.1f;
+		float radius = 0.05f;
+
+		bool onPlatform = true;
 	};
 
 	namespace BrickType {
@@ -42,14 +44,12 @@ namespace Game {
 	}//namespace BrickType
 
 	struct Brick {
-		glm::ivec2 coords = glm::ivec2(0);
-		glm::vec2 pos = glm::vec2(0.f);
 		int type = BrickType::Brick;
+		glm::vec2 pos = glm::vec2(0.f);
+		glm::ivec2 coords = glm::ivec2(0);
 	public:
 		Brick() = default;
 		Brick(int x, int y, int type_) : coords(glm::ivec2(x, y)), type(type_) {}
 	};
 
 }//namespace Game
-
-
