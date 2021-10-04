@@ -312,6 +312,11 @@ namespace Renderer {
 
 	}
 
+	Quad GetLastQuad() {
+		ASSERT_MSG(data.idx != 0, "\tAttempting to retrieve quad, when no quads were rendered yet.\n");
+		return data.quadsBuffer[data.idx-1];
+	}
+
 	float ResolveTextureIdx(const ITextureRef& texture) {
 		float idx = 0.f;
 

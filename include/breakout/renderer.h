@@ -68,4 +68,6 @@ namespace Renderer {
 	void RenderText(const FontRef& font, const char* text, const glm::vec2& topLeft, float scale, const glm::vec4& color);
 	void RenderText_Centered(const FontRef& font, const char* text, const glm::vec2& center, float scale, const glm::vec4& color);
 
+	Quad GetLastQuad();
+
 }//namespace Renderer
