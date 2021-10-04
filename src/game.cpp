@@ -12,6 +12,8 @@
 #include <GLFW/glfw3.h>
 
 #include <vector>
+#include <string>
+#include <filesystem>
 
 namespace Game {
 
@@ -19,9 +21,9 @@ namespace Game {
 #define PLATFORM_HEIGHT 0.03f
 #define PLATFORM_BOUNCE_STEEPNESS 1.5f
 
-#define RESET_DELAY_SEC 0.75f
+#define RESET_DELAY_SEC 1.25f
 
-#define DEFAULT_BALL_SPEED 1.0f
+#define DEFAULT_BALL_SPEED 1.5f
 #define DEFAULT_PLATFORM_SPEED 0.5f
 #define DEFAULT_PLATFORM_SCALE 0.2f
 
@@ -29,6 +31,8 @@ namespace Game {
 		bool left = false;
 		bool right = false;
 	};
+
+	typedef void (*TransitionHandlerType)();
 
 	struct InGameState {
 		Platform p;
@@ -46,7 +50,13 @@ namespace Game {
 		glm::vec2 brickSize;
 		float fieldOffsetY = 0.2f;
 
-		float lostBallTime = 0.f;
+		GameState transition_nextState;
+		float transition_endTime = 0.f;
+		std::string transition_msg;
+		bool transition_keepBallMoving = false;
+		TransitionHandlerType TransitionHandler = nullptr;
+
+		bool endScreen_gameWon = false;
 	};
 
 	struct GameResources {
@@ -54,6 +64,8 @@ namespace Game {
 		AtlasTextureRef atlas;
 		TextureRef background;
 		FontRef font;
+
+		std::vector<std::string> levelPaths;
 	};
 
 	static GameResources res;
@@ -67,6 +79,9 @@ namespace Game {
 	void CollisionResolution();
 	void MidGame_Reset();
 	void GameStateReset();
+
+	void Transition_LoadLevel();
+	void Transition_BallLost();
 
 	void Ingame_KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods);
 
@@ -92,6 +107,20 @@ namespace Game {
 		res.atlas = std::make_shared<AtlasTexture>("res/textures/atlas01.png", glm::ivec2(128, 128));
 		res.background = std::make_shared<Texture>("res/textures/background_ingame.png");
 		res.font = std::make_shared<Font>("res/fonts/PermanentMarker-Regular.ttf");
+
+		//load all level filepaths
+		try {
+			LOG(LOG_INFO, "Levels:\n");
+			for (auto& entry : std::filesystem::directory_iterator("res/levels/")) {
+				if (entry.path().extension() == ".txt") {
+					res.levelPaths.push_back(entry.path().string());
+					LOG(LOG_INFO, "\t%s\n", res.levelPaths.back().c_str());
+				}
+			}
+		}
+		catch (std::exception&) {
+			LOG(LOG_ERROR, "Levels directory not found.");
+		}
 	}
 
 	void Run() {
@@ -170,7 +199,9 @@ namespace Game {
 		state.state = GameState::Playing;
 		DeltaTimeUpdate();
 
-		LoadLevel("res/levels/level01.txt");
+		if (!LoadLevel(res.levelPaths[0].c_str())) {
+			throw std::exception();
+		}
 
 		GameStateReset();
 
@@ -199,15 +230,41 @@ namespace Game {
 					Renderer::RenderQuad(glm::vec3(0.f), glm::vec2(1.f), glm::vec4(glm::vec3(0.0f), 0.5f));
 					//TODO: render menu stuff
 					break;
-				case GameState::LostBall:
+				case GameState::Transition:
 					RenderScene();
-					//continue moving the ball
-					state.b.pos += state.b.dir * state.b.speed * state.deltaTime;
-
-					if (state.lostBallTime + RESET_DELAY_SEC < glfwGetTime()) {
-						state.state = GameState::Playing;
-						MidGame_Reset();
+					if (state.transition_msg[0] != '\0') {
+						Renderer::RenderText_Centered(res.font, state.transition_msg.c_str(), glm::vec2(0.f), 2.f, glm::vec4(1.f));
 					}
+
+					if (state.transition_keepBallMoving) {
+						state.b.pos += state.b.dir * state.b.speed * state.deltaTime;
+					}
+
+					if (state.transition_endTime < glfwGetTime()) {
+						if (state.TransitionHandler != nullptr) {
+							state.TransitionHandler();
+						}
+						else {
+							state.state = state.transition_nextState;
+						}
+					}
+					break;
+				case GameState::EndScreen:
+					if (state.endScreen_gameWon) {
+						Renderer::RenderText_Centered(res.font, "You won!", glm::vec2(0.f, 0.3f), 2.f, glm::vec4(1.f));
+
+						snprintf(textbuf, sizeof(textbuf), "Levels cleared: %d", state.level);
+						Renderer::RenderText_Centered(res.font, textbuf, glm::vec2(-0.3f, 0.1f), 1.f, glm::vec4(1.f));
+						snprintf(textbuf, sizeof(textbuf), "Lives remaining: %d", state.lives);
+						Renderer::RenderText_Centered(res.font, textbuf, glm::vec2(0.3f, 0.1f), 1.f, glm::vec4(1.f));
+					}
+					else {
+						Renderer::RenderText_Centered(res.font, "You lost!", glm::vec2(0.f, 0.3f), 2.f, glm::vec4(1.f));
+
+						snprintf(textbuf, sizeof(textbuf), "Levels cleared: %d", state.level);
+						Renderer::RenderText_Centered(res.font, textbuf, glm::vec2(0.0f, 0.1f), 1.f, glm::vec4(1.f));
+					}
+					//TODO: render buttons
 					break;
 			}
 
@@ -287,6 +344,16 @@ namespace Game {
 			//collision detection & resolution
 			CollisionResolution();
 		}
+
+		//level finished condition check
+		if (state.bricks.size() < 1) {
+			state.level++;
+			state.transition_keepBallMoving = true;
+			state.transition_endTime = glfwGetTime() + RESET_DELAY_SEC;
+			state.state = GameState::Transition;
+			state.transition_msg = "Level finished!";
+			state.TransitionHandler = Transition_LoadLevel;
+		}
 	}
 
 	void CollisionResolution() {
@@ -328,12 +395,24 @@ namespace Game {
 		//collisions with walls (left/top/right -> bounce, bottom -> lose)
 		if (WallsCollision()) {
 			if ((--state.lives) <= 0) {
-				state.state = GameState::EndScreen;
+				state.transition_nextState = GameState::EndScreen;
+				state.transition_endTime = glfwGetTime() + RESET_DELAY_SEC;
+				state.transition_keepBallMoving = true;
+				state.transition_msg = "Game over!";
+				state.TransitionHandler = nullptr;
+				state.endScreen_gameWon = false;
+
+				state.state = GameState::Transition;
 				LOG(LOG_INFO, "Ball lost. Game over.\n");
 			}
 			else {
-				state.lostBallTime = glfwGetTime();
-				state.state = GameState::LostBall;
+				state.transition_nextState = GameState::Playing;
+				state.transition_endTime = glfwGetTime() + RESET_DELAY_SEC;
+				state.transition_keepBallMoving = true;
+				state.transition_msg = "Ball lost!";
+				state.TransitionHandler = Transition_BallLost;
+
+				state.state = GameState::Transition;
 				LOG(LOG_INFO, "Ball lost. Remaining lives: %d\n", state.lives);
 			}
 		}
@@ -476,6 +555,28 @@ namespace Game {
 		}
 		else
 			return false;
+	}
+
+	void Transition_BallLost() {
+		MidGame_Reset();
+		state.state = GameState::Playing;
+	}
+
+	void Transition_LoadLevel() {
+		if (res.levelPaths.size() <= state.level) {
+			//no more levels -> game finished
+			state.endScreen_gameWon = true;
+			state.state = GameState::EndScreen;
+		}
+		else {
+			//load next level & reset state
+			if (!LoadLevel(res.levelPaths[state.level].c_str())) {
+				LOG(LOG_WARN, "Level loading error ('%s').\n", res.levelPaths[state.level].c_str());
+				throw std::exception();
+			}
+			GameStateReset();
+			state.state = GameState::Playing;
+		}
 	}
 
 }//namespace Game
