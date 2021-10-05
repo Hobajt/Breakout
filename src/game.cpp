@@ -8,6 +8,7 @@
 #include "breakout/text.h"
 #include "breakout/utils.h"
 #include "breakout/framebuffer.h"
+#include "breakout/particles.h"
 
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
@@ -101,6 +102,8 @@ namespace Game {
 		std::vector<Button> activeButtons;
 		Effects effects;
 		int bricksLeft = 0;
+
+		ParticleSystem emission;
 	};
 
 	struct GameResources {
@@ -135,6 +138,8 @@ namespace Game {
 
 	void Ingame_KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods);
 	void Ingame_MouseCallback(GLFWwindow* window, int button, int action, int mods);
+
+	void BallEmission_ParticleUpdate(std::vector<Particle>& particles_prev, std::vector<Particle>& particles, float deltaTime);
 
 	void Btn_Resume();
 	void Btn_Options();
@@ -201,6 +206,8 @@ namespace Game {
 		res.background = std::make_shared<Texture>("res/textures/background_ingame.png");
 		res.fontSmall = std::make_shared<Font>("res/fonts/PermanentMarker-Regular.ttf", 48);
 		res.fontBig = std::make_shared<Font>("res/fonts/PermanentMarker-Regular.ttf", 96);
+
+		state.emission = ParticleSystem(BallEmission_ParticleUpdate, 100);
 
 		srand(unsigned int(glfwGetTime()));
 
@@ -492,6 +499,8 @@ namespace Game {
 			res.postprocShader->SetInt("effect", 0);
 			state.effects.postprocEffect = PostProcEffectType::None;
 		}
+
+		state.emission.Reset();
 	}
 
 	void GameStateReset() {
@@ -505,6 +514,9 @@ namespace Game {
 	void RenderScene() {
 		//background texture
 		//Renderer::RenderQuad(glm::vec3(0.f, 0.f, 1.f), glm::vec2(1.f), res.background);
+
+		//ball emission
+		state.emission.Render();
 
 		//platform
 		Renderer::RenderQuad(glm::vec3(state.p.pos, PLATFORM_Y_POS, 0.f), glm::vec2(state.p.scale, PLATFORM_HEIGHT), glm::vec4(glm::vec3(0.3f), 1.f));
@@ -530,11 +542,16 @@ namespace Game {
 		snprintf(textbuf, sizeof(textbuf), "Level: %d", state.level + 1);
 		Renderer::RenderText(res.fontSmall, textbuf, glm::vec2(-0.95f, 0.8f), 1.f, glm::vec4(1.f));
 
+		
+
 		//Renderer::RenderQuad(glm::vec3(0.f, 0.f, 1.f), glm::vec2(1.f), res.font->GetAtlasTexture());
 	}
 
 	void GameUpdate() {
 		float prevPos = state.p.pos;
+
+		//ball emission update
+		state.emission.Update(state.deltaTime);
 
 		if (state.effects.postprocEffect == PostProcEffectType::Blur) {
 			res.postprocShader->Bind();
@@ -1066,6 +1083,74 @@ namespace Game {
 			else
 				return tc[type];
 		}
+	}
+
+	static glm::vec4 color_lerp(const glm::vec4& a, const glm::vec4& b, float t) {
+		return b * t + a * (1.f - t);
+	}
+
+	void BallEmission_ParticleUpdate(std::vector<Particle>& particles_prev, std::vector<Particle>& particles, float deltaTime) {
+		//process particles from previous frame
+		particles.clear();
+		for (Particle& p : particles_prev) {
+			p.lifespan -= deltaTime;
+
+			if (p.lifespan > 0.f) {
+				p.position += p.velocity * deltaTime;
+				p.angle_rad += p.angularVelocity * deltaTime;
+				p.scale += p.deltaScale * deltaTime;
+				
+				//prematurely discard way too small particles
+				if (p.scale < 0.f) continue;
+
+				p.color = color_lerp(p.color, glm::vec4(1.f, 1.f, 0.f, 1.f), 1.f - p.lifespan / p.startingLife);
+
+				particles.push_back(p);
+			}
+		}
+
+#define EMISSION_LIFESPAN_MAX 0.3f
+#define EMISSION_LIFESPAN_MIN 0.1f
+#define EMISSION_SCALE_MAX 0.15f
+#define EMISSION_SCALE_MIN 0.01f
+
+#define EMISSION_MAX_VELOCITY_OFFSET_ANGLE 0.75f
+#define EMISSION_SPEED_MAX 0.75f
+#define EMISSION_SPEED_MIN 0.25f
+#define EMISSION_ANGULAR_SPEED_MAX  10.f
+#define EMISSION_ANGULAR_SPEED_MIN -10.f
+
+#define EMISSION_SCALING_MAX 0.f
+#define EMISSION_SCALING_MIN -0.5f
+
+		//(float(rand()) / RAND_MAX)
+
+		//new particle generation - only when the ball is moving
+		if (!state.b.onPlatform) {
+			Particle p;
+
+			float theta_rad = atan2f(-state.b.dir.y, -state.b.dir.x);
+			float _1_ballSpeed = 1.f / state.b.speed;
+
+			for (int i = 0; i < 5; i++) {
+				p.lifespan = p.startingLife = (float(rand()) / RAND_MAX) * (EMISSION_LIFESPAN_MAX - EMISSION_LIFESPAN_MIN) + EMISSION_LIFESPAN_MIN;
+				p.position = state.b.pos;
+				p.angle_rad = (float(rand()) / RAND_MAX) * float(M_PI) * 2.f;
+				p.scale = (float(rand()) / RAND_MAX) * (EMISSION_SCALE_MAX - EMISSION_SCALE_MIN) + EMISSION_SCALE_MIN;
+
+				float angle_rad = theta_rad + ((float(rand()) / RAND_MAX) * 2.f * M_PI - M_PI) * EMISSION_MAX_VELOCITY_OFFSET_ANGLE;
+				p.velocity = glm::vec2(cosf(angle_rad), sinf(angle_rad)) * ((EMISSION_SPEED_MAX - EMISSION_SPEED_MIN) * (float(rand()) / RAND_MAX) + EMISSION_SPEED_MIN) * _1_ballSpeed;
+
+				p.angularVelocity = (EMISSION_ANGULAR_SPEED_MAX - EMISSION_ANGULAR_SPEED_MIN) * (float(rand()) / RAND_MAX) + EMISSION_ANGULAR_SPEED_MIN;
+				p.deltaScale = (EMISSION_SCALING_MAX - EMISSION_SCALING_MIN) * (float(rand()) / RAND_MAX) + EMISSION_SCALING_MIN;
+
+				p.color = glm::vec4(1.f, 0.f, 0.f, 1.f) + glm::vec4(-0.3f * (float(rand()) / RAND_MAX), 0.3f * (float(rand()) / RAND_MAX), 0.f, 0.f);
+
+				particles.push_back(p);
+			}
+		}
+
+		LOG(LOG_INFO, "Particle count: %d\n", (int)particles.size());
 	}
 
 }//namespace Game
