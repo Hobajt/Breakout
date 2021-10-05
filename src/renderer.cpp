@@ -187,34 +187,37 @@ namespace Renderer {
 	}
 
 	void Flush() {
-		if (data.fbo != nullptr) {
-			data.fbo->Bind();
+		if (data.idx > 0) {
+
+			if (data.fbo != nullptr) {
+				data.fbo->Bind();
+			}
+			else {
+				Framebuffer::Unbind();
+			}
+
+			glEnable(GL_PRIMITIVE_RESTART);
+			glPrimitiveRestartIndex((unsigned int)-1);
+
+			data.shader->Bind();
+			glBindVertexArray(data.vao);
+
+			glBindBuffer(GL_ARRAY_BUFFER, data.vbo);
+			glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(Quad) * data.idx, data.quadsBuffer);
+
+			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, data.ebo);
+			glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, sizeof(QuadIndices) * data.idx, data.indicesBuffer);
+
+			for (int i = 0; i < maxTextures; i++) {
+				data.textures[i]->Bind(i);
+			}
+
+			glDrawElements(GL_TRIANGLE_STRIP, data.idx * 5, GL_UNSIGNED_INT, nullptr);
+			data.stats.drawCalls++;
 		}
-		else {
-			Framebuffer::Unbind();
-		}
-
-		glEnable(GL_PRIMITIVE_RESTART);
-		glPrimitiveRestartIndex((unsigned int)-1);
-
-		data.shader->Bind();
-		glBindVertexArray(data.vao);
-
-		glBindBuffer(GL_ARRAY_BUFFER, data.vbo);
-		glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(Quad) * data.idx, data.quadsBuffer);
-
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, data.ebo);
-		glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, sizeof(QuadIndices) * data.idx, data.indicesBuffer);
-
-		for (int i = 0; i < maxTextures; i++) {
-			data.textures[i]->Bind(i);
-		}
-
-		glDrawElements(GL_TRIANGLE_STRIP, data.idx * 5, GL_UNSIGNED_INT, nullptr);
 
 		data.idx = 0;
 		data.texIdx = 1;
-		data.stats.drawCalls++;
 	}
 
 	void RenderQuad(const glm::vec3& center, const glm::vec2& halfSize, const ITextureRef& texture) {

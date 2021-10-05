@@ -347,26 +347,51 @@ namespace Game {
 					GameUpdate();
 					RenderScene();
 					break;
+				case GameState::Transition:
+					RenderScene();
+					TransitionLogic();
+					break;
+				case GameState::Paused:
+				case GameState::IngameMenu:
+					RenderScene();
+					break;
+				case GameState::EndScreen:
+					break;
+			}
+			Renderer::End();
+
+			Framebuffer::Unbind();
+			glClear(GL_COLOR_BUFFER_BIT);
+			Renderer::UseFBO(nullptr);
+
+			//==== postprocessing render pass ====
+			Renderer::SetShader(res.postprocShader);
+			Renderer::Begin();
+			Renderer::RenderQuad(glm::vec3(0.f), glm::vec2(1.f), res.fbo->GetTexture());
+			Renderer::End();
+
+			//==== GUI render pass (done separately, so that post-processing isn't applied) ====
+			Renderer::SetShader(res.quadShader);
+			Renderer::Begin();
+			switch (state.state) {
 				case GameState::Paused:
 					RenderScene();
 					Renderer::RenderQuad(glm::vec3(0.f), glm::vec2(1.f), glm::vec4(glm::vec3(0.0f), 0.5f));
 					Renderer::RenderText_Centered(res.fontSmall, "Game Paused", glm::vec2(0.f), 2.f, glm::vec4(1.f));
 					break;
 				case GameState::IngameMenu:
-					RenderScene();
 					Renderer::RenderQuad(glm::vec3(0.f), glm::vec2(1.f), glm::vec4(glm::vec3(0.0f), 0.5f));
 					Renderer::RenderText_Centered(res.fontBig, "BREAKOUT", glm::vec2(0.f, 0.7f), 2.f, glm::vec4(1.f));
-					
+
 					RenderButton2("btn_game_resume", Btn_Resume, "Resume", glm::vec2(0.f, 0.3f), glm::vec2(0.2f, 0.07f), 1.f, res.atlas->GetTexture(0, 1), res.atlas->GetTexture(1, 1));
 					RenderButton2("btn_game_reset", Btn_Reset, "Reset game", glm::vec2(0.f, 0.1f), glm::vec2(0.2f, 0.07f), 1.f, res.atlas->GetTexture(0, 1), res.atlas->GetTexture(1, 1));
 					RenderButton2("btn_game_menu", Btn_MainMenu, "Main menu", glm::vec2(0.f, -0.1f), glm::vec2(0.2f, 0.07f), 1.f, res.atlas->GetTexture(0, 1), res.atlas->GetTexture(1, 1));
 					RenderButton2("btn_game_quit", Btn_Quit, "Quit", glm::vec2(0.f, -0.3f), glm::vec2(0.2f, 0.07f), 1.f, res.atlas->GetTexture(0, 1), res.atlas->GetTexture(1, 1));
 					break;
-				case GameState::Transition:
-					RenderScene();
-					TransitionLogic();
-					break;
 				case GameState::EndScreen:
+					state.effects.postprocEffect = PostProcEffectType::None;
+					res.postprocShader->Bind();
+					res.postprocShader->SetInt("effect", 0);
 					if (state.endScreen_gameWon) {
 						Renderer::RenderText_Centered(res.fontSmall, "You won!", glm::vec2(0.f, 0.3f), 2.f, glm::vec4(1.f));
 
@@ -391,15 +416,6 @@ namespace Game {
 					}
 					break;
 			}
-			Renderer::End();
-
-			Framebuffer::Unbind();
-			glClear(GL_COLOR_BUFFER_BIT);
-
-			Renderer::UseFBO(nullptr);
-			Renderer::SetShader(res.postprocShader);
-			Renderer::Begin();
-			Renderer::RenderQuad(glm::vec3(0.f), glm::vec2(1.f), res.fbo->GetTexture());
 			Renderer::End();
 
 			window.SwapBuffers();
@@ -723,6 +739,10 @@ namespace Game {
 		double currTime = glfwGetTime();
 		state.deltaTime = (currTime - prevTime);
 		prevTime = currTime;
+
+		if (state.deltaTime > 1.f) {
+			state.deltaTime = 0.1f;
+		}
 	}
 
 	void Ingame_KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods) {
