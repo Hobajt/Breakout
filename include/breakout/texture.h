@@ -94,6 +94,10 @@ public:
 	Texture() = default;
 	~Texture();
 
+	GLuint Handle() const { return handle; }
+
+	void Resize(int width, int height);
+
 	//move enabled
 	Texture(Texture&&) noexcept;
 	Texture& operator=(Texture&&) noexcept;
@@ -106,12 +110,16 @@ public:
 private:
 	void Release() noexcept;
 	void Move(Texture&&) noexcept;
+
+	void GenTexture(void* data);
 protected:
 	GLuint handle = 0;
 
 	int width;
 	int height;
 	GLenum internalFormat;
+	GLenum format;
+	GLenum dtype;
 	TextureParams params;
 };
 

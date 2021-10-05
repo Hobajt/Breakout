@@ -7,6 +7,7 @@
 #include "breakout/texture.h"
 #include "breakout/text.h"
 #include "breakout/utils.h"
+#include "breakout/framebuffer.h"
 
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
@@ -22,6 +23,7 @@ namespace Game {
 #define PLATFORM_BOUNCE_STEEPNESS 1.5f
 
 #define RESET_DELAY_SEC 1.25f
+#define FADEIN_DURATION_SEC 0.5f
 
 #define DEFAULT_BALL_SPEED 1.5f
 #define DEFAULT_PLATFORM_SPEED 0.5f
@@ -54,7 +56,20 @@ namespace Game {
 		void Click();
 		bool Hover();
 	};
-	\
+
+	enum class MenuState {
+		Menu, Options, Play
+	};
+
+	enum class PostProcEffectType { None, Blur, Drunk, Chaos, Confuse };
+	
+	struct Effects {
+		bool wallBreaker = false;
+		bool platformSticking = false;
+
+		PostProcEffectType postprocEffect = PostProcEffectType::None;
+	};
+
 	struct InGameState {
 		Platform p;
 		Ball b;
@@ -81,16 +96,23 @@ namespace Game {
 
 		bool running = true;
 		bool endScreen_gameWon = false;
-		bool menu_optionsScreen = false;
+		MenuState menuState = MenuState::Menu;
 
 		std::vector<Button> activeButtons;
+		Effects effects;
+		int bricksLeft = 0;
 	};
 
 	struct GameResources {
 		ShaderRef quadShader;
+		ShaderRef postprocShader;
+
 		AtlasTextureRef atlas;
 		TextureRef background;
-		FontRef font;
+		FontRef fontBig;
+		FontRef fontSmall;
+
+		FramebufferRef fbo;
 
 		std::vector<std::string> levelPaths;
 	};
@@ -109,6 +131,7 @@ namespace Game {
 
 	void Transition_LoadLevel();
 	void Transition_BallLost();
+	void TransitionLogic();
 
 	void Ingame_KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods);
 	void Ingame_MouseCallback(GLFWwindow* window, int button, int action, int mods);
@@ -161,6 +184,10 @@ namespace Game {
 		state.inputs.mouseY = y;
 	}
 
+	void OnResizeCallback(int width, int height) {
+		res.fbo->Resize(width, height);
+	}
+
 	//General initialization. Needs to be called before Run().
 	void Init() {
 		Window& window = Window::Get();
@@ -169,9 +196,18 @@ namespace Game {
 		}
 
 		res.quadShader = Resources::TryGetShader("quads", "res/shaders/basic_quad_shader");
+		res.postprocShader = Resources::TryGetShader("postproc", "res/shaders/postproc_shader");
 		res.atlas = std::make_shared<AtlasTexture>("res/textures/atlas01.png", glm::ivec2(128, 128));
 		res.background = std::make_shared<Texture>("res/textures/background_ingame.png");
-		res.font = std::make_shared<Font>("res/fonts/PermanentMarker-Regular.ttf");
+		res.fontSmall = std::make_shared<Font>("res/fonts/PermanentMarker-Regular.ttf", 48);
+		res.fontBig = std::make_shared<Font>("res/fonts/PermanentMarker-Regular.ttf", 96);
+
+		srand(unsigned int(glfwGetTime()));
+
+		TextureParams tParams = {};
+		tParams.wrapping = GL_REPEAT;
+		res.fbo = std::make_shared<Framebuffer>(window.Width(), window.Height(), GL_RGBA, tParams);
+		window.SetResizeCallback(OnResizeCallback);
 
 		//load all level filepaths
 		try {
@@ -217,27 +253,35 @@ namespace Game {
 	bool MainMenu() {
 		Window& window = Window::Get();
 
-		state.menu_optionsScreen = false;
+		state.menuState = MenuState::Menu;
 
 		glClearColor(0.1f, 0.1f, 0.1f, 1.f);
-		while (!window.ShouldClose() && state.running && state.state == GameState::MainMenu) {
+		while (!window.ShouldClose() && state.running && (state.state == GameState::MainMenu || state.state == GameState::Transition) && state.menuState != MenuState::Play) {
 			glClear(GL_COLOR_BUFFER_BIT);
 			Renderer::Begin();
 			state.activeButtons.clear();
 
-			MousePosUpdate();
+			switch (state.menuState) {
+				case MenuState::Menu:
+					Renderer::RenderText_Centered(res.fontBig, "BREAKOUT", glm::vec2(0.f, 0.7f), 2.f, glm::vec4(1.f));
 
-			if (!state.menu_optionsScreen) {
-				Renderer::RenderText_Centered(res.font, "BREAKOUT", glm::vec2(0.f, 0.7f), 4.f, glm::vec4(1.f));
-
-				RenderButton2("btn_menu_play", Btn_Play, "Play", glm::vec2(0.f, 0.3f), glm::vec2(0.2f, 0.07f), 1.f, res.atlas->GetTexture(0, 1), res.atlas->GetTexture(1, 1));
-				RenderButton2("btn_menu_options", Btn_Options, "Options", glm::vec2(0.f, 0.1f), glm::vec2(0.2f, 0.07f), 1.f, res.atlas->GetTexture(0, 1), res.atlas->GetTexture(1, 1));
-				RenderButton2("btn_menu_quit", Btn_Quit, "Quit", glm::vec2(0.f, -0.1f), glm::vec2(0.2f, 0.07f), 1.f, res.atlas->GetTexture(0, 1), res.atlas->GetTexture(1, 1));
+					RenderButton2("btn_menu_play", Btn_Play, "Play", glm::vec2(0.f, 0.3f), glm::vec2(0.2f, 0.07f), 1.f, res.atlas->GetTexture(0, 1), res.atlas->GetTexture(1, 1));
+					RenderButton2("btn_menu_options", Btn_Options, "Options", glm::vec2(0.f, 0.1f), glm::vec2(0.2f, 0.07f), 1.f, res.atlas->GetTexture(0, 1), res.atlas->GetTexture(1, 1));
+					RenderButton2("btn_menu_quit", Btn_Quit, "Quit", glm::vec2(0.f, -0.1f), glm::vec2(0.2f, 0.07f), 1.f, res.atlas->GetTexture(0, 1), res.atlas->GetTexture(1, 1));
+					break;
+				case MenuState::Options:
+					Renderer::RenderText_Centered(res.fontBig, "Options", glm::vec2(0.f, 0.55f), 1.5f, glm::vec4(1.f));
+					RenderButton2("btn_opt_back", Btn_OptionsBack, "Back", glm::vec2(0.f, -0.1f), glm::vec2(0.2f, 0.07f), 1.f, res.atlas->GetTexture(0, 1), res.atlas->GetTexture(1, 1));
+					break;
 			}
-			else {
-				Renderer::RenderText_Centered(res.font, "Options", glm::vec2(0.f, 0.55f), 3.f, glm::vec4(1.f));
 
-				RenderButton2("btn_opt_back", Btn_OptionsBack, "Back", glm::vec2(0.f, -0.1f), glm::vec2(0.2f, 0.07f), 1.f, res.atlas->GetTexture(0, 1), res.atlas->GetTexture(1, 1));
+			switch (state.state) {
+				case GameState::MainMenu:
+					MousePosUpdate();
+					break;
+				case GameState::Transition:
+					TransitionLogic();
+					break;
 			}
 
 			Renderer::End();
@@ -245,6 +289,29 @@ namespace Game {
 		}
 
 		return true;
+	}
+
+	void TransitionLogic() {
+		if (state.transition_msg[0] != '\0') {
+			Renderer::RenderText_Centered(res.fontSmall, state.transition_msg.c_str(), glm::vec2(0.f), 2.f, glm::vec4(1.f));
+		}
+
+		if (state.transition_keepBallMoving) {
+			state.b.pos += state.b.dir * state.b.speed * state.deltaTime;
+		}
+		if (state.transition_fadeIn) {
+			float alpha = 1.f - (glfwGetTime() - state.transition_startTime) / (state.transition_endTime - state.transition_startTime);
+			Renderer::RenderQuad(glm::vec3(0.f), glm::vec2(1.f), glm::vec4(glm::vec3(0.0f), alpha));
+		}
+
+		if (state.transition_endTime < glfwGetTime()) {
+			if (state.TransitionHandler != nullptr) {
+				state.TransitionHandler();
+			}
+			else {
+				state.state = state.transition_nextState;
+			}
+		}
 	}
 
 	void Play() {
@@ -262,9 +329,14 @@ namespace Game {
 		GameStateReset();
 
 		glClearColor(0.1f, 0.1f, 0.1f, 1.f);
-		while (!window.ShouldClose() && state.running && state.state != GameState::MainMenu) {
+		while (!window.ShouldClose() && state.running && state.state != GameState::MainMenu && state.menuState != MenuState::Menu) {
+			res.fbo->Bind();
 			glClear(GL_COLOR_BUFFER_BIT);
+
+			Renderer::UseFBO(res.fbo);
+			Renderer::SetShader(res.quadShader);
 			Renderer::Begin();
+
 			state.activeButtons.clear();
 
 			DeltaTimeUpdate();
@@ -278,12 +350,12 @@ namespace Game {
 				case GameState::Paused:
 					RenderScene();
 					Renderer::RenderQuad(glm::vec3(0.f), glm::vec2(1.f), glm::vec4(glm::vec3(0.0f), 0.5f));
-					Renderer::RenderText_Centered(res.font, "Game Paused", glm::vec2(0.f), 2.f, glm::vec4(1.f));
+					Renderer::RenderText_Centered(res.fontSmall, "Game Paused", glm::vec2(0.f), 2.f, glm::vec4(1.f));
 					break;
 				case GameState::IngameMenu:
 					RenderScene();
 					Renderer::RenderQuad(glm::vec3(0.f), glm::vec2(1.f), glm::vec4(glm::vec3(0.0f), 0.5f));
-					Renderer::RenderText_Centered(res.font, "BREAKOUT", glm::vec2(0.f, 0.7f), 4.f, glm::vec4(1.f));
+					Renderer::RenderText_Centered(res.fontBig, "BREAKOUT", glm::vec2(0.f, 0.7f), 2.f, glm::vec4(1.f));
 					
 					RenderButton2("btn_game_resume", Btn_Resume, "Resume", glm::vec2(0.f, 0.3f), glm::vec2(0.2f, 0.07f), 1.f, res.atlas->GetTexture(0, 1), res.atlas->GetTexture(1, 1));
 					RenderButton2("btn_game_reset", Btn_Reset, "Reset game", glm::vec2(0.f, 0.1f), glm::vec2(0.2f, 0.07f), 1.f, res.atlas->GetTexture(0, 1), res.atlas->GetTexture(1, 1));
@@ -292,45 +364,26 @@ namespace Game {
 					break;
 				case GameState::Transition:
 					RenderScene();
-					if (state.transition_msg[0] != '\0') {
-						Renderer::RenderText_Centered(res.font, state.transition_msg.c_str(), glm::vec2(0.f), 2.f, glm::vec4(1.f));
-					}
-
-					if (state.transition_keepBallMoving) {
-						state.b.pos += state.b.dir * state.b.speed * state.deltaTime;
-					}
-					if (state.transition_fadeIn) {
-						float alpha =  1.f - (glfwGetTime() - state.transition_startTime) / (state.transition_endTime - state.transition_startTime);
-						Renderer::RenderQuad(glm::vec3(0.f), glm::vec2(1.f), glm::vec4(glm::vec3(0.0f), alpha));
-					}
-
-					if (state.transition_endTime < glfwGetTime()) {
-						if (state.TransitionHandler != nullptr) {
-							state.TransitionHandler();
-						}
-						else {
-							state.state = state.transition_nextState;
-						}
-					}
+					TransitionLogic();
 					break;
 				case GameState::EndScreen:
 					if (state.endScreen_gameWon) {
-						Renderer::RenderText_Centered(res.font, "You won!", glm::vec2(0.f, 0.3f), 2.f, glm::vec4(1.f));
+						Renderer::RenderText_Centered(res.fontSmall, "You won!", glm::vec2(0.f, 0.3f), 2.f, glm::vec4(1.f));
 
 						snprintf(textbuf, sizeof(textbuf), "Levels cleared: %d", state.level);
-						Renderer::RenderText_Centered(res.font, textbuf, glm::vec2(-0.3f, 0.1f), 1.f, glm::vec4(1.f));
+						Renderer::RenderText_Centered(res.fontSmall, textbuf, glm::vec2(-0.3f, 0.1f), 1.f, glm::vec4(1.f));
 						snprintf(textbuf, sizeof(textbuf), "Lives remaining: %d", state.lives);
-						Renderer::RenderText_Centered(res.font, textbuf, glm::vec2(0.3f, 0.1f), 1.f, glm::vec4(1.f));
+						Renderer::RenderText_Centered(res.fontSmall, textbuf, glm::vec2(0.3f, 0.1f), 1.f, glm::vec4(1.f));
 
 						RenderButton2("btn_win_reset", Btn_Reset, "Play again", glm::vec2(0.f, -0.1f), glm::vec2(0.2f, 0.07f), 1.f, res.atlas->GetTexture(0, 1), res.atlas->GetTexture(1, 1));
 						RenderButton2("btn_win_menu", Btn_MainMenu, "Main menu", glm::vec2(0.f, -0.3f), glm::vec2(0.2f, 0.07f), 1.f, res.atlas->GetTexture(0, 1), res.atlas->GetTexture(1, 1));
 						RenderButton2("btn_win_quit", Btn_Quit, "Quit", glm::vec2(0.f, -0.5f), glm::vec2(0.2f, 0.07f), 1.f, res.atlas->GetTexture(0, 1), res.atlas->GetTexture(1, 1));
 					}
 					else {
-						Renderer::RenderText_Centered(res.font, "You lost!", glm::vec2(0.f, 0.3f), 2.f, glm::vec4(1.f));
+						Renderer::RenderText_Centered(res.fontSmall, "You lost!", glm::vec2(0.f, 0.3f), 2.f, glm::vec4(1.f));
 
 						snprintf(textbuf, sizeof(textbuf), "Levels cleared: %d", state.level);
-						Renderer::RenderText_Centered(res.font, textbuf, glm::vec2(0.0f, 0.1f), 1.f, glm::vec4(1.f));
+						Renderer::RenderText_Centered(res.fontSmall, textbuf, glm::vec2(0.0f, 0.1f), 1.f, glm::vec4(1.f));
 
 						RenderButton2("btn_lost_reset", Btn_Reset, "Play again", glm::vec2(0.f, -0.1f), glm::vec2(0.2f, 0.07f), 1.f, res.atlas->GetTexture(0, 1), res.atlas->GetTexture(1, 1));
 						RenderButton2("btn_lost_menu", Btn_MainMenu, "Main menu", glm::vec2(0.f, -0.3f), glm::vec2(0.2f, 0.07f), 1.f, res.atlas->GetTexture(0, 1), res.atlas->GetTexture(1, 1));
@@ -338,17 +391,27 @@ namespace Game {
 					}
 					break;
 			}
-
 			Renderer::End();
+
+			Framebuffer::Unbind();
+			glClear(GL_COLOR_BUFFER_BIT);
+
+			Renderer::UseFBO(nullptr);
+			Renderer::SetShader(res.postprocShader);
+			Renderer::Begin();
+			Renderer::RenderQuad(glm::vec3(0.f), glm::vec2(1.f), res.fbo->GetTexture());
+			Renderer::End();
+
 			window.SwapBuffers();
 		}
 	}
 
 	void Btn_Play() {
 		state.state = GameState::Transition;
+		state.menuState = MenuState::Play;
 
 		state.transition_startTime = glfwGetTime();
-		state.transition_endTime = state.transition_startTime + 0.5f;
+		state.transition_endTime = state.transition_startTime + FADEIN_DURATION_SEC;
 		state.transition_keepBallMoving = false;
 		state.transition_nextState = GameState::Playing;
 		state.transition_fadeIn = true;
@@ -356,11 +419,11 @@ namespace Game {
 	}
 
 	void Btn_Options() {
-		state.menu_optionsScreen = true;
+		state.menuState = MenuState::Options;
 	}
 
 	void Btn_OptionsBack() {
-		state.menu_optionsScreen = false;
+		state.menuState = MenuState::Menu;
 	}
 
 	void Btn_Resume() {
@@ -368,7 +431,15 @@ namespace Game {
 	}
 
 	void Btn_MainMenu() {
-		state.state = GameState::MainMenu;
+		state.state = GameState::Transition;
+		state.menuState = MenuState::Menu;
+
+		state.transition_startTime = glfwGetTime();
+		state.transition_endTime = state.transition_startTime + FADEIN_DURATION_SEC;
+		state.transition_keepBallMoving = false;
+		state.transition_nextState = GameState::MainMenu;
+		state.transition_fadeIn = true;
+		state.transition_msg = "";
 	}
 
 	void Btn_Reset() {
@@ -376,7 +447,15 @@ namespace Game {
 		state.lives = STARTING_LIVES;
 		Transition_LoadLevel();
 		GameStateReset();
-		state.state = GameState::Playing;
+		//state.state = GameState::Playing;
+
+		state.state = GameState::Transition;
+		state.transition_startTime = glfwGetTime();
+		state.transition_endTime = state.transition_startTime + FADEIN_DURATION_SEC;
+		state.transition_keepBallMoving = false;
+		state.transition_nextState = GameState::Playing;
+		state.transition_fadeIn = true;
+		state.transition_msg = "";
 	}
 
 	void Btn_Quit() {
@@ -389,6 +468,14 @@ namespace Game {
 		state.b.pos = glm::vec2(state.p.pos, PLATFORM_Y_POS + PLATFORM_HEIGHT + state.b.radius);
 		state.b.dir = glm::vec2(0.0f, 1.f);
 		state.b.onPlatform = true;
+
+		state.effects.wallBreaker = false;
+		state.effects.platformSticking = false;
+		if (state.effects.postprocEffect != PostProcEffectType::None) {
+			res.postprocShader->Bind();
+			res.postprocShader->SetInt("effect", 0);
+			state.effects.postprocEffect = PostProcEffectType::None;
+		}
 	}
 
 	void GameStateReset() {
@@ -410,7 +497,10 @@ namespace Game {
 		//bricks
 		for (Brick& b : state.bricks) {
 			/*Renderer::RenderQuad(glm::vec3(b.pos, 0.f), glm::vec2(state.brickSize), glm::vec4(1.f, 0.f, 0.f, 1.f));*/
-			Renderer::RenderQuad(glm::vec3(b.pos, 0.f), glm::vec2(state.brickSize), res.atlas->GetTexture(1,0));
+			Renderer::RenderQuad(glm::vec3(b.pos, 0.f), glm::vec2(state.brickSize), res.atlas->GetTexture(b.color, 0));
+			if (b.type != BrickType::Brick) {
+				Renderer::RenderQuad(glm::vec3(b.pos, 0.f), glm::vec2(state.brickSize), res.atlas->GetTexture(b.tc.x, b.tc.y));
+			}
 		}
 
 		//ball
@@ -419,16 +509,27 @@ namespace Game {
 
 		//texts
 		snprintf(textbuf, sizeof(textbuf), "Lives: %d", state.lives);
-		Renderer::RenderText(res.font, textbuf, glm::vec2(-0.95f, 0.9f), 1.f, glm::vec4(1.f));
+		Renderer::RenderText(res.fontSmall, textbuf, glm::vec2(-0.95f, 0.9f), 1.f, glm::vec4(1.f));
 
 		snprintf(textbuf, sizeof(textbuf), "Level: %d", state.level + 1);
-		Renderer::RenderText(res.font, textbuf, glm::vec2(-0.95f, 0.8f), 1.f, glm::vec4(1.f));
+		Renderer::RenderText(res.fontSmall, textbuf, glm::vec2(-0.95f, 0.8f), 1.f, glm::vec4(1.f));
 
 		//Renderer::RenderQuad(glm::vec3(0.f, 0.f, 1.f), glm::vec2(1.f), res.font->GetAtlasTexture());
 	}
 
 	void GameUpdate() {
 		float prevPos = state.p.pos;
+
+		if (state.effects.postprocEffect == PostProcEffectType::Blur) {
+			res.postprocShader->Bind();
+			res.postprocShader->SetFloat("offset", 3.f / float(Window::Get().Height()));
+			res.postprocShader->SetVec2("shakeVec", glm::normalize(glm::vec2(float(rand() * 2.f - 1.f) / RAND_MAX, float(rand() * 2.f - 1.f) / RAND_MAX)) * (0.1f * float(rand()) / RAND_MAX));
+		}
+		else if (state.effects.postprocEffect == PostProcEffectType::Drunk) {
+			res.postprocShader->Bind();
+			res.postprocShader->SetFloat("offset", 3.f * (1.f + (float(rand()) / RAND_MAX) * 2.f) / float(Window::Get().Height()));
+			res.postprocShader->SetVec2("shakeVec", glm::vec2(0.f));
+		}
 
 		//input processing - platform movement
 		if (state.state == GameState::Playing && (state.inputs.left || state.inputs.right)) {
@@ -456,8 +557,14 @@ namespace Game {
 			CollisionResolution();
 		}
 
+		state.bricksLeft = 0;
+		for (Brick& b : state.bricks) {
+			if (b.type == BrickType::Brick)
+				state.bricksLeft++;
+		}
+
 		//level finished condition check
-		if (state.bricks.size() < 1) {
+		if (state.bricksLeft < 1) {
 			state.level++;
 			state.transition_keepBallMoving = true;
 			state.transition_endTime = glfwGetTime() + RESET_DELAY_SEC;
@@ -482,11 +589,86 @@ namespace Game {
 			}
 #else
 			if (Ball_BrickCollision(state.bricks[i], posFix, newDir)) {
-				bricksDeleteIdx.push_back(i);
+				bool bounce = false;
 
-				//fix ball's position and change direction (bounce)
-				state.b.pos += posFix;
-				state.b.dir = newDir;
+				switch (state.bricks[i].type) {
+					default:
+					case BrickType::Brick:
+						bricksDeleteIdx.push_back(i);
+						bounce = true;
+						break;
+					case BrickType::Wall:
+						if (state.effects.wallBreaker) {
+							bricksDeleteIdx.push_back(i);
+						}
+						bounce = true;
+						break;
+					case BrickType::PlatformGrow:
+						bricksDeleteIdx.push_back(i);
+						state.p.scale *= 2.f;
+						bounce = true;
+						break;
+					case BrickType::PlatformShrink:
+						state.p.scale *= 0.5f;
+						bricksDeleteIdx.push_back(i);
+						bounce = true;
+						break;
+					case BrickType::PlatformSticking:
+						state.effects.platformSticking = true;
+						bricksDeleteIdx.push_back(i);
+						bounce = true;
+						break;
+					case BrickType::WallBreaker:
+						state.effects.wallBreaker = true;
+						bricksDeleteIdx.push_back(i);
+						bounce = true;
+						break;
+					case BrickType::BallSpeedUp:
+						state.b.speed *= 1.5f;
+						bricksDeleteIdx.push_back(i);
+						bounce = true;
+						break;
+					case BrickType::BallSlowDown:
+						state.b.speed *= 0.666666f;
+						bricksDeleteIdx.push_back(i);
+						bounce = true;
+						break;
+					case BrickType::EffectBlur:
+						state.effects.postprocEffect = PostProcEffectType::Blur;
+						res.postprocShader->Bind();
+						res.postprocShader->SetInt("effect", 1);
+						bricksDeleteIdx.push_back(i);
+						bounce = true;
+						break;
+					case BrickType::EffectDrunk:
+						state.effects.postprocEffect = PostProcEffectType::Drunk;
+						res.postprocShader->Bind();
+						res.postprocShader->SetInt("effect", 2);
+						bricksDeleteIdx.push_back(i);
+						bounce = true;
+						break;
+					case BrickType::EffectChaos:
+						state.effects.postprocEffect = PostProcEffectType::Chaos;
+						res.postprocShader->Bind();
+						res.postprocShader->SetInt("effect", 3);
+						bricksDeleteIdx.push_back(i);
+						bounce = true;
+						break;
+					case BrickType::EffectConfuse:
+						state.effects.postprocEffect = PostProcEffectType::Confuse;
+						res.postprocShader->Bind();
+						res.postprocShader->SetInt("effect", 4);
+						bricksDeleteIdx.push_back(i);
+						bounce = true;
+						break;
+				}
+
+				if (bounce) {
+					//fix ball's position and change direction (bounce)
+					state.b.pos += posFix;
+					state.b.dir = newDir;
+				}
+
 				break;
 			}
 #endif
@@ -501,7 +683,9 @@ namespace Game {
 		if (Ball_PlatformCollision(posFix, newDir)) {
 			state.b.pos += posFix;
 			state.b.dir = newDir;
-			//state.b.onPlatform = true;
+			if (state.effects.platformSticking) {
+				state.b.onPlatform = true;
+			}
 		}
 
 		//collisions with walls (left/top/right -> bounce, bottom -> lose)
@@ -530,6 +714,7 @@ namespace Game {
 				LOG(LOG_INFO, "Ball lost. Remaining lives: %d\n", state.lives);
 			}
 		}
+
 	}
 
 	void DeltaTimeUpdate() {
@@ -658,7 +843,7 @@ namespace Game {
 			float f = ((P.x - state.p.pos) / state.p.scale) * PLATFORM_BOUNCE_STEEPNESS;
 			out_newDir = glm::normalize(glm::vec2(f, 1.f));
 
-			printf("%.2f\n", f);
+			//printf("%.2f\n", f);
 
 			return true;
 		}
@@ -703,7 +888,7 @@ namespace Game {
 		Renderer::RenderQuad(glm::vec3(center, 0.f), size, texture);
 		state.activeButtons.push_back(Button(btnName, Renderer::GetLastQuad(), callback));
 
-		Renderer::RenderText_Centered(res.font, text, center, fontScale, fontColor);
+		Renderer::RenderText_Centered(res.fontSmall, text, center, fontScale, fontColor);
 	}
 
 	void RenderButton2(const std::string& btnName, Button::ButtonCallbackType callback, const char* text, const glm::vec2& center, const glm::vec2& size, float fontScale, const ITextureRef& texture, const ITextureRef& texture2, const glm::vec4& fontColor) {
@@ -713,7 +898,7 @@ namespace Game {
 			Renderer::RenderQuad(glm::vec3(center, 0.f), size, texture2);
 		}
 
-		Renderer::RenderText_Centered(res.font, text, center, fontScale, fontColor);
+		Renderer::RenderText_Centered(res.fontSmall, text, center, fontScale, fontColor);
 	}
 
 	void Transition_BallLost() {
@@ -777,26 +962,40 @@ namespace Game {
 			prevPos = ++pos;
 
 			//playing field size update
-			if (state.fieldSize.x < s.size())
-				state.fieldSize.x = s.size();
+			int rowLen = s.size() / 2;
+			if (state.fieldSize.x < rowLen)
+				state.fieldSize.x = rowLen;
 			if (s.size() > 1)
 				state.fieldSize.y++;
 			else
 				continue;
 
 			//parse bricks in this row
-			for (int i = 0; i < s.size(); i++) {
-				if (s[i] == ' ' || s[i] == '0')
+			for (int i = 0; i < s.size() / 2; i++) {
+				char color = s[i * 2];
+				char type = s[i * 2 + 1];
+
+				int c = 1;
+				int t = BrickType::Brick;
+
+				//empty space
+				if (type == ' ' || type == '0')
 					continue;
 
-				int type = s[i] - '0';
-				if (type < 0 || type > 9) {
-					LOG(LOG_WARN, "Invalid brick types ('%c')\n", s[i]);
-					continue;
-					//TODO: maybe also allow characters
+				//read block color (or keep default if invalid)
+				if (color >= '1' && color <= '9') {
+					c = int(color - '0');
 				}
 
-				state.bricks.push_back(Brick(i, state.fieldSize.y - 1, type));
+				//block type resolution
+				const char* code = strchr(BrickType::BrickCodes(), type);
+				if (code != nullptr) {
+					t = int(code - BrickType::BrickCodes());
+					state.bricks.push_back(Brick(i, state.fieldSize.y - 1, t, c));
+				}
+				else {
+					LOG(LOG_WARN, "Invalid brick type ('%c')\n", s[i]);
+				}
 			}
 		}
 		//printf("|-%s-|\n", levelDesc.substr(prevPos, pos - prevPos).c_str());
@@ -816,6 +1015,37 @@ namespace Game {
 
 		LOG(LOG_INFO, "Loaded level from '%s'.\n", filepath);
 		return true;
+	}
+
+	namespace BrickType {
+		const char* brickCodes = "BWGSTKUDLRCF";
+
+		const char* BrickCodes() {
+			return brickCodes;
+		}
+
+		glm::ivec2 GetTypeTexCoord(int type, int color) {
+			static glm::ivec2 tc[] = {
+				glm::ivec2(1,0),		//brick - shouldn't ever be picked
+				glm::ivec2(0,2),		//wall
+				glm::ivec2(1,2),		//platform grow
+				glm::ivec2(2,2),		//platform shrink
+				glm::ivec2(3,2),		//platform sticking
+				glm::ivec2(4,2),		//wall breaker
+				glm::ivec2(5,2),		//ball speed up
+				glm::ivec2(6,2),		//ball slow down
+
+				glm::ivec2(0,3),		//blur
+				glm::ivec2(1,3),		//drunk
+				glm::ivec2(2,3),		//chaos
+				glm::ivec2(3,3),		//confuse
+			};
+
+			if (type == BrickType::Brick)
+				return glm::ivec2(color, 0);
+			else
+				return tc[type];
+		}
 	}
 
 }//namespace Game

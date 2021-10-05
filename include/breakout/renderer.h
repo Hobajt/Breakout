@@ -4,6 +4,7 @@
 #include "breakout/shader.h"
 #include "breakout/texture.h"
 #include "breakout/text.h"
+#include "breakout/framebuffer.h"
 
 struct Vertex {
 	glm::vec3 position;
@@ -69,5 +70,7 @@ namespace Renderer {
 	void RenderText_Centered(const FontRef& font, const char* text, const glm::vec2& center, float scale, const glm::vec4& color);
 
 	Quad GetLastQuad();
+
+	void UseFBO(FramebufferRef fbo);
 
 }//namespace Renderer

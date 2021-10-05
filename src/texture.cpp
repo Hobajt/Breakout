@@ -153,25 +153,19 @@ Texture::Texture(int width_, int height_, GLenum internalFormat_, const std::str
 Texture::Texture(int width_, int height_, GLenum internalFormat_, const TextureParams& params_, const std::string& name_)
 	: Texture(width_, height_, internalFormat_, GL_RGB, GL_UNSIGNED_BYTE, nullptr, params_, name_) {}
 
-Texture::Texture(int width_, int height_, GLenum internalFormat_, GLenum format, GLenum dtype, void* data, const std::string& name_, const TextureParams& params_)
-	: Texture(width_, height_, internalFormat_, format, dtype, data, params_, name_) {}
+Texture::Texture(int width_, int height_, GLenum internalFormat_, GLenum format_, GLenum dtype_, void* data, const std::string& name_, const TextureParams& params_)
+	: Texture(width_, height_, internalFormat_, format_, dtype_, data, params_, name_) {}
 
-Texture::Texture(int width_, int height_, GLenum internalFormat_, GLenum format, GLenum dtype, void* data, const TextureParams& params_, const std::string& name_)
-	: ITexture(name_), width(width_), height(height_), internalFormat(internalFormat_), params(params_) {
+Texture::Texture(int width_, int height_, GLenum internalFormat_, GLenum format_, GLenum dtype_, void* data, const TextureParams& params_, const std::string& name_)
+	: ITexture(name_), width(width_), height(height_), internalFormat(internalFormat_), params(params_), format(format_), dtype(dtype_) {
+	glActiveTexture(GL_TEXTURE0);
+
 	glActiveTexture(GL_TEXTURE0);
 
 	glGenTextures(1, &handle);
 	glBindTexture(GL_TEXTURE_2D, handle);
 
-	glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, width, height, 0, format, dtype, data);
-	if (params.filtering != GL_NONE) {
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, params.filtering);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, params.filtering);
-	}
-	if (params.wrapping != GL_NONE) {
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, params.wrapping);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, params.wrapping);
-	}
+	GenTexture(data);
 
 	glBindTexture(GL_TEXTURE_2D, 0);
 
@@ -192,6 +186,30 @@ Texture& Texture::operator=(Texture&& t) noexcept {
 	ITexture::operator=(std::move(t));
 	Move(std::move(t));
 	return *this;
+}
+
+void Texture::Resize(int width_, int height_) {
+	width = width_;
+	height = height_;
+
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, handle);
+
+	GenTexture(nullptr);
+
+	glBindTexture(GL_TEXTURE_2D, 0);
+}
+
+void Texture::GenTexture(void* data) {
+	glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, width, height, 0, format, dtype, data);
+	if (params.filtering != GL_NONE) {
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, params.filtering);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, params.filtering);
+	}
+	if (params.wrapping != GL_NONE) {
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, params.wrapping);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, params.wrapping);
+	}
 }
 
 void Texture::Bind(int slot) const {
@@ -226,6 +244,8 @@ void Texture::Move(Texture&& t) noexcept {
 	width = t.width;
 	height = t.height;
 	internalFormat = t.internalFormat;
+	format = t.format;
+	dtype = t.dtype;
 
 	t.handle = 0;
 }

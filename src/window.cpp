@@ -14,6 +14,8 @@ void onResizeCallback(GLFWwindow* window, int width, int height);
 
 #define WINDOW_VALIDITY_CHECK() ASSERT_MSG(window != nullptr, "\tAttempting to use uninitialized window.\n")
 
+int Window::sampleCount = 8;
+
 Window& Window::Get() {
 	static Window instance = Window();
 	return instance;

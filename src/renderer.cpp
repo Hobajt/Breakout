@@ -101,6 +101,8 @@ namespace Renderer {
 		int texIdx = 1;
 
 		RendererStats stats;
+
+		FramebufferRef fbo = nullptr;
 	};
 
 	static RendererData data;
@@ -156,19 +158,18 @@ namespace Renderer {
 			//=== empty texture ===
 			uint8_t tmp[] = { 255,255,255,255 };
 			data.blankTexture = std::make_shared<Texture>(1, 1, GL_RGBA, GL_RGBA, GL_UNSIGNED_BYTE, &tmp, "blankTexture");
+		}
 
+		for (int i = 0; i < maxTextures; i++) {
+			data.textures[i] = data.blankTexture.get();
+		}
 
-			for (int i = 0; i < maxTextures; i++) {
-				data.textures[i] = data.blankTexture.get();
-			}
-
-			//=== setup texture slots in shader ===
-			data.shader->Bind();
-			char buf[256];
-			for (int i = 0; i < maxTextures; i++) {
-				snprintf(buf, sizeof(buf), "textures[%d]", i);
-				data.shader->SetInt(buf, i);
-			}
+		//=== setup texture slots in shader ===
+		data.shader->Bind();
+		char buf[256];
+		for (int i = 0; i < maxTextures; i++) {
+			snprintf(buf, sizeof(buf), "textures[%d]", i);
+			data.shader->SetInt(buf, i);
 		}
 
 		data.idx = 0;
@@ -186,6 +187,13 @@ namespace Renderer {
 	}
 
 	void Flush() {
+		if (data.fbo != nullptr) {
+			data.fbo->Bind();
+		}
+		else {
+			Framebuffer::Unbind();
+		}
+
 		glEnable(GL_PRIMITIVE_RESTART);
 		glPrimitiveRestartIndex((unsigned int)-1);
 
@@ -315,6 +323,10 @@ namespace Renderer {
 	Quad GetLastQuad() {
 		ASSERT_MSG(data.idx != 0, "\tAttempting to retrieve quad, when no quads were rendered yet.\n");
 		return data.quadsBuffer[data.idx-1];
+	}
+
+	void UseFBO(FramebufferRef fbo) {
+		data.fbo = fbo;
 	}
 
 	float ResolveTextureIdx(const ITextureRef& texture) {

@@ -23,6 +23,8 @@ public:
 	int Width() const { return width; }
 	int Height() const { return height; }
 	float AspectRatio() const { return float(width) / float(height); }
+
+	void SetResizeCallback(ResizeCallbackType ResizeCallback_) { ResizeCallback = ResizeCallback_; }
 private:
 	Window();
 	~Window();
@@ -34,6 +36,8 @@ private:
 	//move disabled
 	Window(Window&&) = delete;
 	Window& operator= (Window&&) = delete;
+public:
+	static int sampleCount;
 private:
 	int width = 640;
 	int height = 480;
