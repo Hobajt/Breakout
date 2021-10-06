@@ -637,8 +637,8 @@ namespace Game {
 						bounce = true;
 						break;
 					case BrickType::PlatformGrow:
-						bricksDeleteIdx.push_back(i);
 						state.p.scale *= 2.f;
+						bricksDeleteIdx.push_back(i);
 						bounce = true;
 						break;
 					case BrickType::PlatformShrink:
@@ -701,6 +701,8 @@ namespace Game {
 					state.b.pos += posFix;
 					state.b.dir = newDir;
 				}
+
+				//if (isnan(state.b.pos.x) || isnan(state.b.pos.y)) { __debugbreak(); }
 
 				break;
 			}
@@ -898,8 +900,13 @@ namespace Game {
 		if (dist < state.b.radius) {
 			//compute position fix vector
 			glm::vec2 a = (P - state.b.pos);
-			glm::vec2 b = a * (state.b.radius / dist);
-			out_posFix = a - b;
+			if (dist > 1e-3f) {
+				glm::vec2 b = a * (state.b.radius / dist);
+				out_posFix = a - b;
+			}
+			else {
+				out_posFix = a;
+			}
 
 			//glm::vec2 N = ...;
 			//out_newDir = glm::normalize(state.b.dir - 2.f * glm::dot(state.b.dir, N) * N);
@@ -1150,7 +1157,7 @@ namespace Game {
 			}
 		}
 
-		LOG(LOG_INFO, "Particle count: %d\n", (int)particles.size());
+		//LOG(LOG_INFO, "Particle count: %d\n", (int)particles.size());
 	}
 
 }//namespace Game
