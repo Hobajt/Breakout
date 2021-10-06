@@ -14,6 +14,11 @@ namespace Resources {
 			return nullptr;
 	}
 
+	void Clear() {
+		shaders.clear();
+		textures.clear();
+	}
+
 	void AddShader(const std::string& key, ShaderRef& shader) {
 		shaders[key] = shader;
 	}

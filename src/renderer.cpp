@@ -107,6 +107,17 @@ namespace Renderer {
 
 	static RendererData data;
 
+	void Release() {
+		delete[] data.quadsBuffer;
+		delete[] data.indicesBuffer;
+
+		data.shader = nullptr;
+		data.blankTexture = nullptr;
+		for (int i = 0; i < maxTextures; i++)
+			data.textures[i] = nullptr;
+		data.fbo = nullptr;
+	}
+
 	void SetShader(ShaderRef& shader) {
 		data.shader = shader;
 	}

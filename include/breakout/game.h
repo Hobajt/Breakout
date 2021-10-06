@@ -7,6 +7,8 @@ namespace Game {
 	//Initiates the game logic.
 	void Run();
 
+	void Release();
+
 	//==== Structs ====
 
 	enum class GameState {

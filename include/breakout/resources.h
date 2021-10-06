@@ -15,6 +15,8 @@ namespace Resources {
 	ShaderRef GetShader(const std::string& key);
 	void AddShader(const std::string& key, ShaderRef& shader);
 
+	void Clear();
+
 	template<typename... Args>
 	ShaderRef TryGetShader(const std::string& key, Args&&... args) {
 		ShaderRef result = GetShader(key);

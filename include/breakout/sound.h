@@ -6,13 +6,18 @@
 #include <thread>
 #include <mutex>
 
+#include <memory>
+
 namespace Sound {
+
+	struct Audio;
+	using AudioRef = std::shared_ptr<Audio>;
 
 	class Device {
 	public:
 		static Device& Get();
 
-		void Play(ma_decoder* decoder);
+		void Play(AudioRef& audio);
 	private:
 		Device();
 		~Device();
@@ -30,6 +35,9 @@ namespace Sound {
 		std::mutex sleepMutex;
 		std::thread soundThread;
 		bool terminating = false;
+		bool del = false;
+
+		AudioRef currAudio = nullptr;
 	};
 
 	struct Audio {
@@ -52,8 +60,8 @@ namespace Sound {
 
 	//ma_decoder Load(const std::string& filepath);
 
-	void Play(Audio& audio);
+	void Play(AudioRef& audio);
 
-	int KOKOTINA(const char* lsakdhjfgzdkj);
+	void Release();
 
 }//namespace Sound

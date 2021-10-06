@@ -120,7 +120,7 @@ namespace Game {
 
 		std::vector<std::string> levelPaths;
 
-		std::map<std::string, Sound::Audio> sounds;
+		std::map<std::string, Sound::AudioRef> sounds;
 	};
 
 	static GameResources res;
@@ -210,17 +210,17 @@ namespace Game {
 		res.fontSmall = std::make_shared<Font>("res/fonts/PermanentMarker-Regular.ttf", 48);
 		res.fontBig = std::make_shared<Font>("res/fonts/PermanentMarker-Regular.ttf", 96);
 
-		res.sounds["powerup"] = Sound::Audio("res/sounds/powerup.wav");
-		res.sounds["bleep"] = Sound::Audio("res/sounds/bleep.mp3");
-		res.sounds["beep"] = Sound::Audio("res/sounds/bleep.wav");
-		res.sounds["solid"] = Sound::Audio("res/sounds/solid.wav");
-		res.sounds["bang"] = Sound::Audio("res/sounds/thud-bang.mp3");
-		res.sounds["lose"] = Sound::Audio("res/sounds/lose-retro.mp3");
-		res.sounds["scratch"] = Sound::Audio("res/sounds/scratch3.mp3");
+		res.sounds["powerup"] = std::make_shared < Sound::Audio>("res/sounds/powerup.wav");
+		res.sounds["bleep"] = std::make_shared < Sound::Audio>("res/sounds/bleep.mp3");
+		res.sounds["beep"] = std::make_shared < Sound::Audio>("res/sounds/bleep.wav");
+		res.sounds["solid"] = std::make_shared < Sound::Audio>("res/sounds/solid.wav");
+		res.sounds["bang"] = std::make_shared < Sound::Audio>("res/sounds/thud-bang.mp3");
+		res.sounds["lose"] = std::make_shared < Sound::Audio>("res/sounds/lose-retro.mp3");
+		res.sounds["scratch"] = std::make_shared<Sound::Audio>("res/sounds/scratch3.mp3");
 
 		state.emission = ParticleSystem(BallEmission_ParticleUpdate, 100);
 
-		srand(unsigned int(glfwGetTime()));
+		srand((unsigned int)glfwGetTime());
 
 		TextureParams tParams = {};
 		tParams.wrapping = GL_REPEAT;
@@ -266,6 +266,24 @@ namespace Game {
 			Play();
 		}
 
+	}
+
+	void Release() {
+		res.background = nullptr;
+		res.quadShader = nullptr;
+		res.postprocShader = nullptr;
+		res.atlas = nullptr;
+
+		res.fontBig = nullptr;
+		res.fontSmall = nullptr;
+		res.fbo = nullptr;
+
+		res.levelPaths.clear();
+		res.sounds.clear();
+
+		Sound::Release();
+		Resources::Clear();
+		Renderer::Release();
 	}
 
 	bool MainMenu() {
@@ -474,6 +492,7 @@ namespace Game {
 		state.transition_endTime = state.transition_startTime + FADEIN_DURATION_SEC;
 		state.transition_keepBallMoving = false;
 		state.transition_nextState = GameState::MainMenu;
+		state.TransitionHandler = nullptr;
 		state.transition_fadeIn = true;
 		state.transition_msg = "";
 	}

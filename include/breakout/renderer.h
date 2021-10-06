@@ -73,4 +73,6 @@ namespace Renderer {
 
 	void UseFBO(FramebufferRef fbo);
 
+	void Release();
+
 }//namespace Renderer

@@ -21,9 +21,20 @@ namespace Sound {
 		(void)pInput;
 	}
 
-	void Play(Audio& audio) {
-		Device::Get().Play(audio.decoder);
-		LOG(LOG_INFO, "Playing '%s'\n", audio.filepath.c_str());
+	void Play(AudioRef& audio) {
+		if (audio != nullptr) {
+			Device::Get().Play(audio);
+			LOG(LOG_INFO, "Playing '%s'\n", audio->filepath.c_str());
+		}
+	}
+
+	void Release() {
+		/*Device& dev = Device::Get();
+
+		dev.del = true;
+		dev.terminating = true;
+		ma_device_stop(&dev.device);
+		ma_device_uninit(&dev.device);*/
 	}
 
 	//==== Device ====
@@ -33,10 +44,11 @@ namespace Sound {
 		return d;
 	}
 
-	void Device::Play(ma_decoder* decoder_) {
+	void Device::Play(AudioRef& audio) {
 		std::lock_guard guard(mutex);
-		ma_decoder_seek_to_pcm_frame(decoder_, 0);
-		decoder = decoder_;
+		currAudio = audio;
+		ma_decoder_seek_to_pcm_frame(audio->decoder, 0);
+		decoder = audio->decoder;
 	}
 
 	Device::Device() {
@@ -60,13 +72,13 @@ namespace Sound {
 					//new decoder queued & not playing -> start the device
 					if (!playing && decoder != nullptr) {
 						Start();
-						printf("STARTING\n");
+						//printf("STARTING\n");
 					}
 
 					if (playing) {
 						//await device termination signal (on audio end)
 						ma_event_wait(&stopSignal);
-						printf("Done playing\n");
+						//printf("Done playing\n");
 
 						//stop the device
 						ma_device_stop(&device);
@@ -82,6 +94,7 @@ namespace Sound {
 
 	Device::~Device() {
 		terminating = true;
+		playing = false;
 		soundThread.join();
 
 		ma_device_uninit(&device);
