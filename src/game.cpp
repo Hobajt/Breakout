@@ -284,6 +284,7 @@ namespace Game {
 		Sound::Release();
 		Resources::Clear();
 		Renderer::Release();
+		Window::Get().Release();
 	}
 
 	bool MainMenu() {

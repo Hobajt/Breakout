@@ -25,6 +25,8 @@ public:
 	float AspectRatio() const { return float(width) / float(height); }
 
 	void SetResizeCallback(ResizeCallbackType ResizeCallback_) { ResizeCallback = ResizeCallback_; }
+
+	void Release();
 private:
 	Window();
 	~Window();
@@ -41,6 +43,7 @@ public:
 private:
 	int width = 640;
 	int height = 480;
+	bool released = false;
 
 	GLFWwindow* window = nullptr;
 	ResizeCallbackType ResizeCallback = nullptr;

@@ -53,9 +53,7 @@ Window::Window() {
 }
 
 Window::~Window() {
-	glfwDestroyWindow(window);
-	glfwTerminate();
-	LOG(LOG_DTOR, "[D] Window\n");
+	Release();
 }
 
 //===================
@@ -128,5 +126,13 @@ void Window::Resize(int newWidth, int newHeight) {
 	}
 }
 
+void Window::Release() {
+	if (!released) {
+		released = true;
+		glfwDestroyWindow(window);
+		glfwTerminate();
+		LOG(LOG_DTOR, "[D] Window\n");
+	}
+}
 
 #undef WINDOW_VALIDITY_CHECK

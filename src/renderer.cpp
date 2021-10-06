@@ -116,6 +116,7 @@ namespace Renderer {
 		for (int i = 0; i < maxTextures; i++)
 			data.textures[i] = nullptr;
 		data.fbo = nullptr;
+		LOG(LOG_DTOR, "[D] Renderer\n");
 	}
 
 	void SetShader(ShaderRef& shader) {
