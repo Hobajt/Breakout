@@ -9,7 +9,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 project(Breakout)
 
 add_executable(main 
-    "src/main.cpp" "include/breakout/log.h" "include/breakout/gl_debug.h" "src/gl_debug.cpp" "include/breakout/glm.h" "include/breakout/window.h" "src/window.cpp"  "include/breakout/shader.h" "src/shader.cpp" "include/breakout/resources.h" "src/resources.cpp" "include/breakout/utils.h" "src/utils.cpp"  "include/breakout/renderer.h" "src/renderer.cpp" "include/breakout/texture.h" "src/texture.cpp" "src/stb_image.cpp" "include/breakout/game.h" "src/game.cpp"    "include/breakout/text.h" "src/text.cpp" "include/breakout/framebuffer.h" "src/framebuffer.cpp" "include/breakout/particles.h" "src/particles.cpp")
+    "src/main.cpp" "include/breakout/log.h" "include/breakout/gl_debug.h" "src/gl_debug.cpp" "include/breakout/glm.h" "include/breakout/window.h" "src/window.cpp"  "include/breakout/shader.h" "src/shader.cpp" "include/breakout/resources.h" "src/resources.cpp" "include/breakout/utils.h" "src/utils.cpp"  "include/breakout/renderer.h" "src/renderer.cpp" "include/breakout/texture.h" "src/texture.cpp" "src/stb_image.cpp" "include/breakout/game.h" "src/game.cpp"    "include/breakout/text.h" "src/text.cpp" "include/breakout/framebuffer.h" "src/framebuffer.cpp" "include/breakout/particles.h" "src/particles.cpp" "src/miniaudio.cpp" "include/breakout/sound.h" "src/sound.cpp")
 
 target_include_directories(main PUBLIC include)
 
@@ -43,5 +43,8 @@ target_include_directories(main PUBLIC vendor/stb_image/include)
 #==== FreeType ====
 add_subdirectory(vendor/freetype)
 target_link_libraries(main PUBLIC freetype)
+
+#==== miniaudio ====
+target_include_directories(main PUBLIC vendor/miniaudio/include)
 
 message(STATUS "===Generated with config types: ${CMAKE_CONFIGURATION_TYPES}===")

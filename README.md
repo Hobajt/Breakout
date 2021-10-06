@@ -7,4 +7,4 @@ Clone of the game Breakout, inspired by <a href="https://learnopengl.com/In-Prac
 * Glad
 * glm
 * FreeType
-* irrKlang
+* <a href="https://github.com/mackron/miniaudio">miniaudio</a>

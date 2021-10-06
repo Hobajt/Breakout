@@ -9,6 +9,7 @@
 #include "breakout/utils.h"
 #include "breakout/framebuffer.h"
 #include "breakout/particles.h"
+#include "breakout/sound.h"
 
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
@@ -118,6 +119,8 @@ namespace Game {
 		FramebufferRef fbo;
 
 		std::vector<std::string> levelPaths;
+
+		std::map<std::string, Sound::Audio> sounds;
 	};
 
 	static GameResources res;
@@ -207,6 +210,14 @@ namespace Game {
 		res.fontSmall = std::make_shared<Font>("res/fonts/PermanentMarker-Regular.ttf", 48);
 		res.fontBig = std::make_shared<Font>("res/fonts/PermanentMarker-Regular.ttf", 96);
 
+		res.sounds["powerup"] = Sound::Audio("res/sounds/powerup.wav");
+		res.sounds["bleep"] = Sound::Audio("res/sounds/bleep.mp3");
+		res.sounds["beep"] = Sound::Audio("res/sounds/bleep.wav");
+		res.sounds["solid"] = Sound::Audio("res/sounds/solid.wav");
+		res.sounds["bang"] = Sound::Audio("res/sounds/thud-bang.mp3");
+		res.sounds["lose"] = Sound::Audio("res/sounds/lose-retro.mp3");
+		res.sounds["scratch"] = Sound::Audio("res/sounds/scratch3.mp3");
+
 		state.emission = ParticleSystem(BallEmission_ParticleUpdate, 100);
 
 		srand(unsigned int(glfwGetTime()));
@@ -259,6 +270,7 @@ namespace Game {
 
 	bool MainMenu() {
 		Window& window = Window::Get();
+		Sound::Play(res.sounds["powerup"]);
 
 		state.menuState = MenuState::Menu;
 
@@ -322,6 +334,7 @@ namespace Game {
 	}
 
 	void Play() {
+		Sound::Play(res.sounds["powerup"]);
 		Window& window = Window::Get();
 
 		//state.state = GameState::Playing;
@@ -627,46 +640,55 @@ namespace Game {
 				switch (state.bricks[i].type) {
 					default:
 					case BrickType::Brick:
+						Sound::Play(res.sounds["solid"]);
 						bricksDeleteIdx.push_back(i);
 						bounce = true;
 						break;
 					case BrickType::Wall:
+						Sound::Play(res.sounds["solid"]);
 						if (state.effects.wallBreaker) {
 							bricksDeleteIdx.push_back(i);
 						}
 						bounce = true;
 						break;
 					case BrickType::PlatformGrow:
+						Sound::Play(res.sounds["powerup"]);
 						state.p.scale *= 2.f;
 						bricksDeleteIdx.push_back(i);
 						bounce = true;
 						break;
 					case BrickType::PlatformShrink:
+						Sound::Play(res.sounds["powerup"]);
 						state.p.scale *= 0.5f;
 						bricksDeleteIdx.push_back(i);
 						bounce = true;
 						break;
 					case BrickType::PlatformSticking:
+						Sound::Play(res.sounds["powerup"]);
 						state.effects.platformSticking = true;
 						bricksDeleteIdx.push_back(i);
 						bounce = true;
 						break;
 					case BrickType::WallBreaker:
+						Sound::Play(res.sounds["powerup"]);
 						state.effects.wallBreaker = true;
 						bricksDeleteIdx.push_back(i);
 						bounce = true;
 						break;
 					case BrickType::BallSpeedUp:
+						Sound::Play(res.sounds["powerup"]);
 						state.b.speed *= 1.5f;
 						bricksDeleteIdx.push_back(i);
 						bounce = true;
 						break;
 					case BrickType::BallSlowDown:
+						Sound::Play(res.sounds["powerup"]);
 						state.b.speed *= 0.666666f;
 						bricksDeleteIdx.push_back(i);
 						bounce = true;
 						break;
 					case BrickType::EffectBlur:
+						Sound::Play(res.sounds["bleep"]);
 						state.effects.postprocEffect = PostProcEffectType::Blur;
 						res.postprocShader->Bind();
 						res.postprocShader->SetInt("effect", 1);
@@ -674,6 +696,7 @@ namespace Game {
 						bounce = true;
 						break;
 					case BrickType::EffectDrunk:
+						Sound::Play(res.sounds["bleep"]);
 						state.effects.postprocEffect = PostProcEffectType::Drunk;
 						res.postprocShader->Bind();
 						res.postprocShader->SetInt("effect", 2);
@@ -681,6 +704,7 @@ namespace Game {
 						bounce = true;
 						break;
 					case BrickType::EffectChaos:
+						Sound::Play(res.sounds["bleep"]);
 						state.effects.postprocEffect = PostProcEffectType::Chaos;
 						res.postprocShader->Bind();
 						res.postprocShader->SetInt("effect", 3);
@@ -688,6 +712,7 @@ namespace Game {
 						bounce = true;
 						break;
 					case BrickType::EffectConfuse:
+						Sound::Play(res.sounds["bleep"]);
 						state.effects.postprocEffect = PostProcEffectType::Confuse;
 						res.postprocShader->Bind();
 						res.postprocShader->SetInt("effect", 4);
@@ -721,6 +746,7 @@ namespace Game {
 			if (state.effects.platformSticking) {
 				state.b.onPlatform = true;
 			}
+			Sound::Play(res.sounds["bang"]);
 		}
 
 		//collisions with walls (left/top/right -> bounce, bottom -> lose)
@@ -735,6 +761,7 @@ namespace Game {
 				state.endScreen_gameWon = false;
 
 				state.state = GameState::Transition;
+				Sound::Play(res.sounds["lose"]);
 				LOG(LOG_INFO, "Ball lost. Game over.\n");
 			}
 			else {
@@ -746,6 +773,7 @@ namespace Game {
 				state.transition_fadeIn = false;
 
 				state.state = GameState::Transition;
+				Sound::Play(res.sounds["scratch"]);
 				LOG(LOG_INFO, "Ball lost. Remaining lives: %d\n", state.lives);
 			}
 		}
