@@ -16,3 +16,9 @@ In order to properly load all game resources, program's working directory needs 
 For running in Visual Studio:
 - Right click *CMakeLists.txt** > Add Debug Configuration > add entry "currentDir": "${workspaceRoot}"
 - Or manually edit *.vs/launch.vs.json*
+
+Game sample:
+<img src='game_sample.gif' />
+PS: 
+- the gif itself is a bit laggy, not the game
+- textures are shit, bcs I've made them myself
