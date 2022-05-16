@@ -18,6 +18,7 @@ For running in Visual Studio:
 - Or manually edit *.vs/launch.vs.json*
 
 Game sample:
+
 <img src='game_sample.gif' />
 PS: 
 - the gif itself is a bit laggy, not the game
